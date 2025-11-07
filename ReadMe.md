@@ -28,7 +28,7 @@ https://aftereffects-ok.github.io/Earthquake-and-Tsunami-Information/
 
 ### 3.1. 地震一覧パネル（左側）
 
-<img src="地震一覧（左側）.png" alt="地震一覧パネル" width="400"/>
+<img src="地震一覧.png" alt="地震一覧パネル" width="400"/>
 
 | UI要素 | 機能説明 |
 | :--- | :--- |
@@ -40,7 +40,7 @@ https://aftereffects-ok.github.io/Earthquake-and-Tsunami-Information/
 
 ### 3.2. 地震詳細パネル（右側）
 
-<img src="地震詳細（右側）.png" alt="地震詳細パネル" width="600"/>
+<img src="地震詳細.png" alt="地震詳細パネル" width="600"/>
 
 | UI要素 | 機能説明 |
 | :--- | :--- |
@@ -55,7 +55,7 @@ https://aftereffects-ok.github.io/Earthquake-and-Tsunami-Information/
 
 選択した地震の情報を、配信テロップのように1ページずつ表示・再生するための機能です。
 
-<img src="固定表示（下側）.png" alt="情報表示バー" width="800"/>
+<img src="情報表示バー.png" alt="情報表示バー" width="800"/>
 
 #### 操作パネル（左側）
 
@@ -114,4 +114,5 @@ https://aftereffects-ok.github.io/Earthquake-and-Tsunami-Information/
     *   サマリー情報や観測地点リストがテキスト表示エリアの2行に収まらない場合、自動的に複数のページに分割して表示します。
 *   **設定の永続化**:
     *   「ショートカットキー」と「情報画面に表示する最低震度」の設定は、ブラウザのローカルストレージに保存され、次回アクセス時も維持されます。
+
 
