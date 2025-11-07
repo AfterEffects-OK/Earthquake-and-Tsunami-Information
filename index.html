@@ -668,10 +668,10 @@
              }
 
              // 2. 都道府県名が除去された残りの文字列から、最初の行政区画名までを抽出する
-             const match = remainingAddr.match(/.*?(市|区|郡|町|村)/);
+             const match = remainingAddr.match(/^.+?(市|区|郡|町|村)/);
 
              // 3. マッチすればそれを返し、しなければ残りの文字列（または元の文字列）を返す
-             return match ? match[0] : remainingAddr || addr;
+             return match ? match[0] : addr;
         };
 
 
@@ -684,9 +684,113 @@
         const fetchEarthquakeData = async () => {
             if (USE_DUMMY_DATA) {
                 console.warn("★★★ 訓練モード有効 ★★★ ダミーデータを使用しています。テスト後は USE_DUMMY_DATA を false に戻してください。");
-                // 新しいダミーデータを配列の先頭に追加
                 const dummyData = [
-                    // --- 訓練用の東日本大震災データ (code: 551) ---
+                    // --- 訓練用の大正関東大震災データ (code: 551) ---
+                    {
+                        "code": 551,
+                        "issue": {
+                            "source": "気象庁",
+                            "time": "1923/09/01 11:59:00",
+                            "type": "DetailScale",
+                            "correct": "None",
+                            "event_id": "19230901115800" // 津波情報と紐付けるID
+                        },
+                        "earthquake": {
+                            "time": "1923-09-01T11:58:00+09:00",
+                            "hypocenter": {
+                                "name": "相模湾北西部",
+                                "latitude": 35.1,
+                                "longitude": 139.5,
+                                "depth": 23,
+                                "magnitude": 7.9
+                            },
+                            "maxScale": 70, // 震度7
+                            "domesticTsunami": "Warning" // 津波警報
+                        },
+                        "points": [
+                            { "pref": "神奈川県", "addr": "神奈川県横浜市", "scale": 70, "isArea": true },
+                            { "pref": "神奈川県", "addr": "神奈川県小田原市", "scale": 70, "isArea": true },
+                            { "pref": "東京都", "addr": "東京都千代田区", "scale": 60, "isArea": true },
+                            { "pref": "千葉県", "addr": "千葉県館山市", "scale": 60, "isArea": true },
+                            { "pref": "埼玉県", "addr": "埼玉県さいたま市", "scale": 55, "isArea": true },
+                            { "pref": "山梨県", "addr": "山梨県甲府市", "scale": 55, "isArea": true },
+                            { "pref": "静岡県", "addr": "静岡県御殿場市", "scale": 50, "isArea": true }
+                        ]
+                    },
+                    // --- 訓練用の大正関東大震災津波情報 (code: 552) ---
+                    {
+                        "code": 552,
+                        "issue": {
+                            "source": "気象庁",
+                            "time": "1923/09/01 12:01:00",
+                            "type": "ScaleAndDestination",
+                            "correct": "None",
+                            "event_id": "19230901115800" // 地震情報と紐付けるID
+                        },
+                        "tsunami": {
+                            "forecasts": [
+                                { "grade": "Warning", "area": { "name": "相模湾・三浦半島" } },
+                                { "grade": "Warning", "area": { "name": "静岡県" } },
+                                { "grade": "Advisory", "area": { "name": "千葉県九十九里・外房" } },
+                                { "grade": "Advisory", "area": { "name": "伊豆諸島" } }
+                            ]
+                        }
+                    },
+                    // --- 訓練用の十勝沖地震データ (code: 551) ---
+                    {
+                        "code": 551,
+                        "issue": {
+                            "source": "気象庁",
+                            "time": "2025/03/20 10:02:00",
+                            "type": "DetailScale",
+                            "correct": "None",
+                            "event_id": "20250320100000" // 津波情報と紐付けるID
+                        },
+                        "earthquake": {
+                            "time": "2025-03-20T10:00:00+09:00",
+                            "hypocenter": {
+                                "name": "十勝沖",
+                                "latitude": 42.5,
+                                "longitude": 144.1,
+                                "depth": 40,
+                                "magnitude": 8.0
+                            },
+                            "maxScale": 60, // 震度6強
+                            "domesticTsunami": "Warning" // 津波警報
+                        },
+                        "points": [
+                            { "pref": "北海道", "addr": "北海道浦幌町", "scale": 60, "isArea": true },
+                            { "pref": "北海道", "addr": "北海道釧路市", "scale": 55, "isArea": true },
+                            { "pref": "北海道", "addr": "北海道帯広市", "scale": 55, "isArea": true },
+                            { "pref": "青森県", "addr": "青森県八戸市", "scale": 50, "isArea": true },
+                            { "pref": "岩手県", "addr": "岩手県盛岡市", "scale": 50, "isArea": true },
+                            { "pref": "北海道", "addr": "北海道札幌市中央区", "scale": 45, "isArea": true },
+                            { "pref": "宮城県", "addr": "宮城県仙台市青葉区", "scale": 40, "isArea": true },
+                            { "pref": "秋田県", "addr": "秋田県秋田市", "scale": 30, "isArea": true }
+                        ]
+                    },
+                    // --- 訓練用の十勝沖地震津波情報 (code: 552) ---
+                    {
+                        "code": 552,
+                        "issue": {
+                            "source": "気象庁",
+                            "time": "2025/03/20 10:05:00",
+                            "type": "ScaleAndDestination",
+                            "correct": "None",
+                            "event_id": "20250320100000" // 地震情報と紐付けるID
+                        },
+                        "tsunami": {
+                            "forecasts": [
+                                { "grade": "Warning", "area": { "name": "北海道太平洋沿岸東部" } },
+                                { "grade": "Warning", "area": { "name": "北海道太平洋沿岸中部" } },
+                                { "grade": "Advisory", "area": { "name": "北海道太平洋沿岸西部" } },
+                                { "grade": "Advisory", "area": { "name": "青森県太平洋沿岸" } },
+                                { "grade": "Advisory", "area": { "name": "岩手県" } },
+                                { "grade": "Advisory", "area": { "name": "宮城県" } }
+                            ]
+                        }
+                    },
+                      // --- 訓練用の東日本大震災データ (code: 551) ---
                     {
                         "code": 551,
                         "issue": {
@@ -854,6 +958,37 @@
                             ]
                         }
                     },
+                    // --- 訓練用の香川県東部地震データ (code: 551) ---
+                    {
+                        "code": 551,
+                        "issue": {
+                            "source": "気象庁",
+                            "time": "2025/11/07 15:05:00",
+                            "type": "DetailScale",
+                            "correct": "None",
+                            "event_id": "20251107150000" // 津波情報と紐付けるID
+                        },
+                        "earthquake": {
+                            "time": "2025-11-07T15:00:00+09:00",
+                            "hypocenter": {
+                                "name": "香川県東部",
+                                "latitude": 34.3,
+                                "longitude": 134.2,
+                                "depth": 10,
+                                "magnitude": 7.0
+                            },
+                            "maxScale": 60, // 震度6強
+                            "domesticTsunami": "None" // 津波なし
+                        },
+                        "points": [
+                            { "pref": "香川県", "addr": "香川県高松市", "scale": 60, "isArea": true },
+                            { "pref": "香川県", "addr": "香川県さぬき市", "scale": 55, "isArea": true },
+                            { "pref": "香川県", "addr": "香川県丸亀市", "scale": 50, "isArea": true },
+                            { "pref": "徳島県", "addr": "徳島県徳島市", "scale": 45, "isArea": true },
+                            { "pref": "岡山県", "addr": "岡山県岡山市", "scale": 40, "isArea": true },
+                            { "pref": "愛媛県", "addr": "愛媛県松山市", "scale": 30, "isArea": true }
+                        ]
+                    },
                     // --- 訓練用の大阪府北部（上町断層帯）地震データ (code: 551) ---
                     {
                         "code": 551,
@@ -867,7 +1002,7 @@
                         "earthquake": {
                             "time": "2025-01-03T14:30:00+09:00",
                             "hypocenter": {
-                                "name": "大阪府北部（上町断層帯）",
+                                "name": "大阪府北部",
                                 "latitude": 34.7,
                                 "longitude": 135.5,
                                 "depth": 10,
@@ -969,8 +1104,6 @@
                         ]
                     }
                 ];
-
-                // --- ダミーデータを使って通常の処理フローを実行 ---
                 const tsunamiDetailsMap = new Map();
                 const tsunamiInfos = dummyData.filter(d => d.code === 552);
                 tsunamiInfos.forEach(info => {
