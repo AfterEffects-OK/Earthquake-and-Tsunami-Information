@@ -1,0 +1,2227 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- Google Fonts: BIZ UDPGothic (Bold 700) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=BIZ+UDPGothic:wght@700&display=swap" rel="stylesheet">
+
+    <!-- タイトルを最大震度3以上に更新 -->
+    <title>地震・津波情報トラッカー</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* カスタムスタイル */
+        /* ダークモード基本設定 */
+        body { 
+            font-family: 'Inter', sans-serif; 
+            background-color: #1f2937; /* Gray-800 */
+            color: #f3f4f6; /* Gray-100 */
+        }
+        
+        /* 震度バッジの色定義 (変更なし) */
+        .shindo-7 { background-color: #6a0dad; color: white; }
+        .shindo-6-plus { background-color: #cd1616; color: white; }
+        .shindo-6-minus { background-color: #ef4444; color: white; }
+        .shindo-5-plus { background-color: #e36105; color: white; }
+        .shindo-5-minus { background-color: #faa615; color: black; } 
+        .shindo-4 { background-color: #e4d907; color: rgb(0, 0, 0); } /* 変更前の色：#10b981 */
+        .shindo-3 { background-color: #2563eb; color: white; } /* 震度3のバッジカラー */
+        .shindo-2 { background-color: #009fdd; color: white; } 
+        .shindo-1 { background-color: #c2e7ff; color: rgb(0, 0, 0); } 
+
+        
+        .shindo-badge {
+            font-family: 'BIZ UDPGothic', sans-serif;
+            display: inline-block;
+            padding: 0.25rem 0.75rem;
+            border-radius: 9999px;
+            font-weight: 700;
+            min-width: 9rem; /* 4文字のテキストが収まる幅に調整 */
+            text-align: center;
+        }
+
+        /* 固定バー内のバッジにのみエッジとシャドウを適用 */
+        #fixed-shindo-bar .shindo-badge {
+            border: 1px solid rgb(79, 79, 79);
+            box-shadow: 0 4px 4px rgb(30, 30, 30);
+        }
+
+        /* 左右分割レイアウトの高さ設定とスクロールを管理するコンテナ */
+        @media (min-width: 768px) {
+            /* 画面全体の高さから、上部要素（タイトル、説明、パディング）と固定フッター（h-16 + p-4）の高さを引いた残り */
+            /* 固定フッターの高さを h-20 (5rem) に変更したため、計算を更新 */
+            .full-height-panel-wrapper {
+                height: calc(100vh - 18rem); /* 17rem -> 18rem (h-32対応) */
+            }
+            /* リストと詳細パネルの高さを親に合わせる */
+            #list-panel, #detail-panel {
+                height: 100%;
+            }
+            /* リストパネルの右側の境界線（縦の区切り線）をダークモード用に調整 */
+            #list-panel {
+                border-right: 1px solid #374151; /* Gray-700 */
+            }
+        }
+        
+        /* リストと詳細パネルは常にスクロール可能にしておく */
+        #list-panel, #detail-panel {
+            overflow-y: auto;
+        }
+
+        /* トグルスイッチのスタイル */
+        #toggle-mode:checked + .toggle-bg {
+            background-color: #60a5fa; /* blue-400 */
+        }
+        #toggle-mode:checked + .toggle-bg ~ .dot {
+            transform: translateX(24px); 
+        }
+        .toggle-bg {
+            background-color: #4b5563; /* Gray-600 */
+        }
+        .dot {
+            background-color: #d1d5db; /* Gray-300 */
+        }
+
+        /* リストアイテムの選択状態をダークモード用に調整 */
+        .earthquake-card.selected {
+            background-color: #1e3a8a; /* blue-900 */
+            border-left: 4px solid #60a5fa; /* blue-400 */
+        }
+
+        /* --- 市区町村名内の改行を防ぐカスタムスタイル --- */
+        .city-list-no-break {
+            /* CJKの単語区切りを尊重し、単語内改行を防ぐ */
+            word-break: keep-all; 
+            /* 行が単語内改行を避けても長すぎる場合は最終的に強制的に改行する */
+            overflow-wrap: break-word; 
+        }
+
+        /* --- 固定フッターのカスタムスタイル --- */
+        #fixed-shindo-bar {
+            /* 配信画面を想定した固定配置と配色 */
+            /* background-color: #0b111a; */ /* 背景色は子要素で個別に設定 */
+            border-top: 4px solid #3b82f6; /* Blue-500 */
+            color: #f3f4f6;
+        }
+
+        /* 固定バーの左側（操作パネル）の背景色 */
+        #shindo-status-wrapper {
+            background-color: #0b111a; /* 元のバーの背景色 */
+            padding-right: 0.75rem; /* 右側に少し余白を追加 */
+            border-top-right-radius: 0.5rem; /* 角を丸めて自然に見せる */
+            border-bottom-right-radius: 0.5rem;
+        }
+
+        /* 自動送り機能の入力欄のスタイル */
+        .autoplay-input {
+            background-color: #374151; /* Gray-700 */
+            border: 1px solid #4b5563; /* Gray-600 */
+            border-radius: 0.375rem;
+        }
+        
+        #shindo-content {
+            /* flex-growコンテナ内で2行のテキストを管理 */
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            height: 100%;
+        }
+
+        /* 右側のコンテンツエリア（バッジ＋テキスト）のラッパー */
+        #content-wrapper {
+            background-color: transparent; /* 背景色を透明に変更  #00ff00 クロマキーグリーン */
+            overflow: hidden; /* スライドするコンテンツをはみ出させない */
+            display: flex;
+            align-items: center;
+        }
+
+        /* 固定バー内のテキスト表示エリアのスタイル */
+        #content-line-1 {
+            /* 変更: 省略表示をやめ、単純な折り返し表示にする */
+            white-space: normal; /* テキストの折り返しを許可 */
+            line-height: 1.4; /* 行の高さを調整 */
+            max-height: 2.8em; /* line-height * 2行分 */
+            overflow: hidden; /* はみ出した部分は隠す（JSでページ分割するため、基本的にはみ出さない） */
+        }
+
+        /* テキストに黒い縁取りを追加するクラス */
+        .text-edge {
+            /* 影を複数重ねて、滑らかな縁取りとドロップシャドウを作成 */
+            text-shadow:
+                -2px -2px 5px #000, 2px -2px 5px #000, -2px 2px 5px #000, 2px 2px 5px #000, /* 4隅の太い影 */
+                -2px 0 3px #000, 2px 0 3px #000, 0 -2px 3px #000, 0 2px 3px #000,       /* 上下左右の太い影 */
+                0 5px 4px rgba(0,0,0,1); /* ドロップシャドウ */
+        }
+
+        /* --- スライドアニメーション --- */
+        @keyframes slide-out-to-left {
+            from { transform: translateX(0); opacity: 1; }
+            to { transform: translateX(-50%); opacity: 0; }
+        }
+        @keyframes slide-in-from-right {
+            from { transform: translateX(50%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+        @keyframes slide-out-to-right {
+            from { transform: translateX(0); opacity: 1; }
+            to { transform: translateX(50%); opacity: 0; }
+        }
+        @keyframes slide-in-from-left {
+            from { transform: translateX(-50%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+
+        .slide-out-left {
+            animation: slide-out-to-left 0.25s ease-out forwards;
+        }
+        .slide-in-right {
+            animation: slide-in-from-right 0.25s ease-in forwards;
+        }
+        .slide-out-right {
+            animation: slide-out-to-right 0.25s ease-out forwards;
+        }
+        .slide-in-left {
+            animation: slide-in-from-left 0.25s ease-in forwards;
+        }
+
+        /* --- 津波情報バッジ --- */
+        .tsunami-badge {
+            display: inline-block;
+            padding: 0.15rem 0.75rem; /* テキストを大きくするため、上下の余白を少し減らす */
+            border-radius: 0.375rem; /* 6px */
+            font-size: 1rem; /* 16px (text-base) に変更 */
+            font-weight: 700;
+        }
+        .tsunami-warning {
+            background-color: #f97316; /* orange-500 */
+            color: white;
+        }
+        .tsunami-none {
+            /* 「概況」バッジのスタイルに合わせる */
+            font-family: 'BIZ UDPGothic', sans-serif;
+            background-color: #6b7280; /* gray-500 */
+            color: white;
+            min-width: 9rem;
+            text-align: center;
+            border-radius: 9999px; /* 左右が円形になるように変更 */
+        }
+        .tsunami-major-warning {
+            background-color: #6a0dad; /* purple-800 */
+            color: white;
+        }
+        .tsunami-warning-detailed { /* tsunami-warning と区別 */
+            background-color: #dc2626; /* red-600 */
+            color: white;
+        }
+        .tsunami-advisory {
+            background-color: #eab308; /* yellow-500 */
+            color: black;
+        }
+        .tsunami-checking {
+            background-color: #3b82f6; /* blue-500 */
+            color: white;
+        }
+
+        /* 固定フッターの津波警報バッジ用のスタイル */
+        #fixed-shindo-bar .tsunami-telop-badge {
+            min-width: 10rem; /* 5文字分の幅を確保 (text-3xlを想定) */
+            border-radius: 0; /* 角丸をなくす */
+            padding-left: 0.5rem;
+            padding-right: 0.5rem;
+            font-size: 1.5rem; /* text-2xl 相当 */
+        }
+
+        /* --- ショートカット設定モーダル --- */
+        #shortcut-modal-input {
+            background-color: #1f2937; /* gray-800 */
+            border-color: #4b5563; /* gray-600 */
+        }
+        #shortcut-modal-input:focus {
+            outline: none;
+            border-color: #3b82f6; /* blue-500 */
+            box-shadow: 0 0 0 2px #1e40af; /* blue-800/50 */
+        }
+
+
+    </style>
+</head>
+<!-- 画面下部の固定バー（h-20）のスペースを確保するために pb-20 に変更 -->
+<body class="p-4 md:p-8 min-h-screen pb-32">
+    <!-- 訓練モード警告表示 -->
+    <div id="dummy-data-warning" class="hidden fixed top-0 left-0 right-0 bg-red-600 text-white text-center p-2 z-50 font-bold shadow-lg">
+        ★★★ 訓練モード有効 ★★★ この画面は訓練用です。配信には使用しないでください。
+    </div>
+
+    <div>
+        <!-- タイトルを最大震度3以上に更新 -->
+        <h1 class="text-3xl font-extrabold text-white mb-2">地震・津波情報トラッカー</h1>
+        <!-- 説明文を最大震度3以上に更新 -->
+        <p class="text-gray-400 mb-4">直近の地震の中から、最大震度3以上を観測した地震を抽出して表示します。</p>
+        <!-- メインコンテンツ (左右分割コンテナ) - md:grid-cols-3 に変更して 1:2 分割 (1/3 + 2/3) -->
+        <div class="grid grid-cols-1 md:grid-cols-3 md:gap-8 full-height-panel-wrapper">
+            
+            <!-- 左パネル: 地震一覧 (1/3 幅) -->
+            <div id="list-panel" class="md:col-span-1 bg-gray-800 rounded-xl shadow-2xl px-4 pb-4 md:px-6 md:pb-6 mb-6 md:mb-0">
+                
+                <!-- 変更点: タイトルとリフレッシュボタンをflexコンテナにまとめる -->
+                <div class="flex justify-between items-center mb-2 border-b border-gray-700 pb-2 sticky top-0 bg-gray-800 z-10 pt-4">
+                    <h2 class="text-xl font-bold text-white">地震一覧</h2>
+                    <div class="flex items-center space-x-2">
+                        <button id="toggle-dummy-data-button" class="bg-yellow-600 hover:bg-yellow-700 text-white font-semibold py-1 px-3 rounded-lg shadow transition duration-150 text-sm">
+                            訓練モードへ
+                        </button>
+                        <button id="refresh-button" class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-1 px-3 rounded-lg shadow transition duration-150 text-sm">
+                            <span id="refresh-text">API更新</span>
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- データの取得日時を表示する要素を追加 -->
+                <p id="fetch-time-display" class="text-xs text-gray-400 text-right mb-4">最終取得日時: データを取得していません</p>
+
+                <div id="loading" class="text-center p-8 text-xl font-medium text-blue-400 hidden">
+                    <div class="animate-spin inline-block w-8 h-8 border-4 border-blue-400 border-t-transparent rounded-full mr-3"></div>
+                    地震情報を取得中...
+                </div>
+
+                <div id="error-message" class="hidden bg-red-900/30 border-l-4 border-red-500 text-red-400 p-4 mb-4 rounded" role="alert">
+                    <p class="font-bold">エラーが発生しました</p>
+                    <p id="error-text">データの取得に失敗しました。APIの制限やネットワーク接続を確認してください。</p>
+                </div>
+
+                <div id="earthquake-list" class="space-y-3">
+                    <!-- 地震リストアイテムがここに挿入されます -->
+                </div>
+
+                <div id="no-data" class="hidden text-center p-8 text-gray-400 border-2 border-dashed border-gray-600 rounded-xl mt-6">
+                    <svg class="w-12 h-12 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                    <!-- メッセージを最大震度3以上に更新 -->
+                    <p>直近で最大震度3以上の地震は観測されていません。</p>
+                </div>
+            </div>
+
+            <!-- 右パネル: 詳細表示 (2/3 幅に変更) -->
+            <div id="detail-panel" class="md:col-span-2 bg-gray-800 rounded-xl shadow-2xl px-4 pb-4 md:px-6 md:pb-6">
+                <div class="flex justify-between items-center mb-4 border-b border-gray-700 pb-2 sticky top-0 bg-gray-800 z-10">
+                    <h2 id="detail-panel-title" class="text-xl font-bold text-white">地震詳細</h2>
+                    <!-- 観測点 / 市町村 切替スイッチをこちらに移動 -->
+                    <div class="flex items-center justify-end">
+                        <span id="label-municipality" class="text-sm font-bold text-blue-400 mr-2 transition-colors duration-200">市区町村別</span>
+                        <label for="toggle-mode" class="flex items-center cursor-pointer" title="表示する地域の粒度を「市区町村別」と「観測点別」で切り替えます">
+                            <div class="relative">
+                                <input type="checkbox" id="toggle-mode" class="sr-only">
+                                <div class="toggle-bg w-12 h-6 rounded-full shadow-inner transition-colors duration-200"></div>
+                                <div class="dot absolute left-1 top-1 w-4 h-4 rounded-full shadow transition-transform duration-200"></div>
+                            </div>
+                        </label>
+                        <span id="label-point" class="text-sm text-gray-400 font-medium ml-2 transition-colors duration-200">観測点別</span>
+                    </div>
+                </div>
+
+                <div id="detail-content">
+                    <div class="text-center p-8 text-gray-400">
+                        <svg class="w-12 h-12 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4h18M3 8h18m-6 4h6m-6 4h6M3 12h2M3 16h2"></path></svg>
+                        <p>左側のリストから地震を選択してください。</p>
+                    </div>
+                </div>
+            </div>
+            
+        </div>
+    </div>
+    
+    <!-- === 新規追加: 配信画面用の固定震度表示バー === -->
+    <div id="fixed-shindo-bar" class="fixed bottom-0 left-0 right-0 shadow-2xl z-50 h-32 p-2">
+        <div class="flex h-full items-center justify-between">
+            
+            <!-- 左: ステータス/切り替えボタン (背景色設定用のラッパーを追加) -->
+            <div id="shindo-status-wrapper" class="h-full flex items-start flex-shrink-0 pt-2 pl-2 relative">
+                <div class="flex flex-col justify-center space-y-0.5 w-full">
+                    <!-- 自動ページ送りコントロール -->
+                    <div id="autoplay-controls" class="flex items-center space-x-2" style="display: none;">
+                        <div class="flex items-center space-x-1">
+                            <input type="number" id="autoplay-duration" value="10" min="1" class="autoplay-input w-12 text-center text-sm p-1">
+                            <span class="text-xs text-gray-400">秒</span>
+                        </div>
+                        <div class="flex items-center space-x-1">
+                            <select id="autoplay-loops" class="autoplay-input text-sm p-1">
+                                <!-- ループ回数オプションはJSで生成 -->
+                            </select>
+                            <span class="text-xs text-gray-400">回</span>
+                        </div>
+                    </div>
+
+                    <!-- ナビゲーションボタン -->
+                    <div id="shindo-nav" class="flex items-center justify-between" style="display: none;">
+                        <div class="flex items-center space-x-1">
+                            <button id="shindo-prev" class="text-white hover:text-blue-300 transition p-1 rounded-full bg-gray-700 hover:bg-gray-600 disabled:opacity-30 disabled:cursor-not-allowed" title="前のページへ">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
+                            </button>
+                            <span id="shindo-page-info" class="text-sm text-gray-400 font-mono w-20 text-center"></span>
+                            <button id="shindo-next" class="text-white hover:text-blue-300 transition p-1 rounded-full bg-gray-700 hover:bg-gray-600 disabled:opacity-30 disabled:cursor-not-allowed" title="次のページへ">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
+                            </button>
+                        </div>
+                        <button id="autoplay-toggle" class="text-white hover:text-blue-300 transition p-1 rounded-full bg-gray-700 hover:bg-gray-600" title="自動ページ送りを再生/停止">
+                            <!-- 再生アイコン -->
+                            <svg id="play-icon" class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path d="M6.3 2.841A1.5 1.5 0 004 4.11V15.89a1.5 1.5 0 002.3 1.269l9.344-5.89a1.5 1.5 0 000-2.538L6.3 2.84z"></path></svg>
+                            <!-- 停止アイコン -->
+                            <svg id="pause-icon" class="w-5 h-5 hidden" fill="currentColor" viewBox="0 0 20 20"><path d="M5 5h10v10H5z"></path></svg>
+                        </button>
+                    </div>
+
+                    <!-- トランジション設定 -->
+                    <div id="transition-controls" class="flex items-center space-x-2" style="display: none;" title="ページの切り替え効果を選択します">
+                        <select id="transition-effect" class="autoplay-input text-sm p-1">
+                            <option value="cut" selected>カット</option>
+                            <option value="slide">スライド</option>
+                        </select>
+                        <!-- 表示リセットボタンをトランジション設定の隣に移動 -->
+                        <button id="reset-display-button" class="bg-red-900 hover:bg-red-800 text-white font-semibold py-1 px-4 rounded-lg shadow transition duration-150 text-sm" style="display: none;" title="表示をリセットします">
+                            リセット
+                        </button>
+                    </div>
+                </div>
+                <button id="shortcut-settings-button" class="absolute top-1 right-1 p-1 text-gray-400 hover:text-white transition" title="再生/停止のショートカットキーを設定します">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path></svg>
+                </button>
+            </div>
+
+            <!-- 右: コンテンツ表示エリア（グリーンバック） -->
+            <div id="content-wrapper" class="flex-grow min-w-0 h-full ml-1.5">
+                <!-- アニメーション用のインナーラッパーを追加 -->
+                <div id="animation-wrapper" class="flex items-center w-full h-full">
+                    <!-- 震度バッジをこちらに移動 -->
+                    <span id="current-shindo-label" class="shindo-badge bg-gray-600 text-white text-3xl h-14 flex items-center justify-center flex-shrink-0 ml-1.5">選択なし</span>
+                    
+                    <!-- テキスト表示エリア -->
+                    <div id="shindo-content" class="flex-grow min-w-0 h-full overflow-hidden ml-2">
+                        <div id="content-line-1" class="text-sm font-medium text-gray-300 truncate text-edge">地震を選択してください。</div>
+                        <div id="content-line-2" class="text-xs text-gray-400 hidden"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <!-- === 固定震度表示バー 終了 === -->
+
+    <script>
+        // 処理された地震データを保持する変数
+        let PROCESSED_EARTHQUAKES = [];
+        // グローバルな表示モード: 'point' (観測点別) または 'municipality' (市区町村別/デフォルト)
+        let DISPLAY_MODE = 'municipality'; // 初期値を市区町村別に変更
+        // 追加: 最後にデータを取得した日時を保持
+        let LAST_FETCH_TIME = null;
+        // 訓練モードの状態を管理するグローバル変数
+        let USE_DUMMY_DATA = false;
+        
+        // --- 固定バー用のグローバル変数 ---
+        // 概況ビュー(インデックス0) + 震度別地域ビュー の全てのビューを格納
+        let FIXED_BAR_VIEWS = []; 
+        let CURRENT_SHINDO_INDEX = 0; // 現在フッターに表示されているビューのインデックス
+        // ---------------------------------
+
+        // --- 自動ページ送り用のグローバル変数 ---
+        let autoplayIntervalId = null;
+        let isAutoplaying = false;
+        let autoplayLoopCounter = 0;
+        let refreshIntervalId = null; // 自動更新のタイマーIDを保持
+        // ------------------------------------
+
+        // --- ショートカットキー用のグローバル変数 ---
+        let shortcutSetting = {
+            ctrl: false,
+            alt: false,
+            shift: false,
+            key: 'Space' // デフォルト
+        };
+        // ------------------------------------
+
+        // --- ループ再生設定用のグローバル変数 ---
+        let loopPlaybackMinScale = 30; // デフォルトは震度3以上
+        // ------------------------------------
+
+
+
+        // --- ユーティリティ関数と設定 ---
+
+        const CONFIG = {
+            // P2P地震情報 API v2のエンドポイント (地震情報コード551は「震源・震度情報」)
+            API_URL: 'https://api.p2pquake.net/v2/history?limit=100',
+            
+            // 地震一覧に表示する地震の「最大」震度の最低ライン (30: 震度3)
+            MIN_LIST_SCALE: 30,
+            
+            // 詳細パネルの震度別観測地点に表示する「観測点」の最低震度ライン (10: 震度1)
+            MIN_DETAIL_SCALE: 10,
+
+            // 固定バーの1ページあたりに表示する市区町村の最大数
+            CITIES_PER_PAGE: 15,
+
+            // APIを自動更新する間隔（ミリ秒）。2分 = 120000ms
+            REFRESH_INTERVAL_MS: 2 * 60 * 1000,
+
+            // 【要設定】Google Apps ScriptのウェブアプリURL
+            GAS_WEB_APP_URL: 'https://script.google.com/macros/s/AKfycbycK2ARMIU1L3mKQYcvsDzCXYRpnOAbAvZmknDzk4cp3_H6gh7IoBkYJTVM3da5nWTi/exec', // ← 地震情報記録用
+
+            // 【要設定】観測点情報記録用のGoogle Apps ScriptウェブアプリURL
+            GAS_POINTS_WEB_APP_URL: 'https://script.google.com/macros/s/AKfycbyKZMDItp342Im5b_PBvpp8X5ST3AH8Ltx6nxdwJiN-QnM9isxavmfKcKrClSzUYG1Dmg/exec', // ← ここに観測点情報用の新しいウェブアプリURLを貼り付けてください
+        };
+
+        /**
+         * テキストが指定された要素の2行分の高さに収まるか測定するヘルパー関数
+         * @param {string} htmlContent - 測定するHTMLコンテンツ
+         * @param {HTMLElement} targetElement - スタイル（幅、フォントサイズなど）の基準となる要素
+         * @returns {boolean} 2行に収まる場合はtrue、収まらない場合はfalse
+         */
+        const doesTextFitInTwoLines = (htmlContent, targetElement) => {
+            // 1. 画面外にダミーの測定用要素を作成
+            const measureDiv = document.createElement('div');
+            measureDiv.style.position = 'absolute';
+            measureDiv.style.left = '-9999px'; // 画面外に配置
+            measureDiv.style.visibility = 'hidden';
+
+            // 2. ターゲット要素のスタイルをコピー
+            const targetStyle = window.getComputedStyle(targetElement);
+            measureDiv.style.width = targetStyle.width;
+            measureDiv.style.font = targetStyle.font;
+            measureDiv.style.lineHeight = targetStyle.lineHeight;
+            measureDiv.style.wordBreak = 'keep-all'; // 分割判定のスタイルを合わせる
+
+            // 3. コンテンツを入れて高さを測定
+            measureDiv.innerHTML = htmlContent;
+            document.body.appendChild(measureDiv);
+            const contentHeight = measureDiv.scrollHeight;
+            const lineHeight = parseFloat(targetStyle.lineHeight);
+            document.body.removeChild(measureDiv); // 測定が終わったら削除
+
+            // 4. 2行分の高さを超えているか判定
+            return contentHeight <= (lineHeight * 2 + 2); // 誤差を考慮して少し余裕を持たせる
+        };
+
+
+        // 震度階級の数値コードを文字列に変換し、バッジの色クラスを返す
+        const scaleToShindo = (scale) => {
+            switch (scale) {
+                // '震度' のテキストを追加
+                case 10: return { label: '震度1', class: 'shindo-1' };
+                case 20: return { label: '震度2', class: 'shindo-2' };
+                case 30: return { label: '震度3', class: 'shindo-3' }; 
+                case 40: return { label: '震度4', class: 'shindo-4' };
+                case 45: return { label: '震度5弱', class: 'shindo-5-minus' };
+                case 50: return { label: '震度5強', class: 'shindo-5-plus' };
+                case 55: return { label: '震度6弱', class: 'shindo-6-minus' };
+                case 60: return { label: '震度6強', class: 'shindo-6-plus' };
+                case 70: return { label: '震度7', class: 'shindo-7' };
+                default: return { label: '震度不明', class: 'bg-gray-400 text-white' };
+            }
+        };
+
+        // 震度階級をソートするためのマップ（降順）
+        // ラベルに「震度」を追加したため、マップのキーも更新
+        const SHINDO_SORT_ORDER = {
+            '震度7': 9, '震度6強': 8, '震度6弱': 7, '震度5強': 6, '震度5弱': 5, '震度4': 4, '震度3': 3, '震度2': 2, '震度1': 1
+        };
+
+        // APIデータ（ISO String）を整形（YYYY/MM/DD HH:mm）
+        const formatDateTime = (isoString) => {
+            if (!isoString) return '不明';
+            try {
+                // ISO 8601形式を解析可能にするために修正
+                const date = new Date(isoString.replace('T', ' ').replace('+09:00', 'Z'));
+                const y = date.getFullYear();
+                const mo = String(date.getMonth() + 1).padStart(2, '0');
+                const d = String(date.getDate()).padStart(2, '0');
+                const h = String(date.getHours()).padStart(2, '0');
+                const m = String(date.getMinutes()).padStart(2, '0');
+                return `${y}/${mo}/${d} ${h}:${m}`;
+            } catch (e) {
+                return '日時不明';
+            }
+        };
+        
+        /**
+         * 現在の時刻を整形（YYYY/MM/DD HH:mm:ss）
+         * @param {Date} date - Dateオブジェクト
+         * @returns {string} フォーマットされた日時文字列
+         */
+        const formatCurrentTime = (date) => {
+            const y = date.getFullYear();
+            const mo = String(date.getMonth() + 1).padStart(2, '0');
+            const d = String(date.getDate()).padStart(2, '0');
+            const h = String(date.getHours()).padStart(2, '0');
+            const m = String(date.getMinutes()).padStart(2, '0');
+            const s = String(date.getSeconds()).padStart(2, '0');
+            return `${y}/${mo}/${d} ${h}:${m}:${s}`;
+        };
+
+        /**
+         * 時刻文字列 (HH:mm) を「午前/午後 X時Y分」形式に変換する
+         * @param {string} timeString - "HH:mm" 形式の時刻文字列
+         * @returns {string} フォーマットされた時刻文字列
+         */
+        const formatTimeForTelop = (timeString) => {
+            if (!timeString || !timeString.includes(':')) {
+                return '';
+            }
+            const [hour, minute] = timeString.split(':').map(num => parseInt(num, 10));
+
+            if (isNaN(hour) || isNaN(minute)) {
+                return '';
+            }
+
+            const ampm = hour < 12 ? '午前' : '午後';
+            const displayHour = hour % 12 === 0 ? (hour === 12 ? 12 : 0) : hour % 12;
+
+            return `${ampm} ${displayHour}時 ${minute}分`;
+        };
+
+
+        /**
+         * 文字列からMD5ハッシュを生成する非同期関数
+         * @param {string} message - ハッシュ化する文字列
+         * @returns {Promise<string>} 16進数文字列のハッシュ
+         */
+        const digestMessage = async (message) => {
+            const msgUint8 = new TextEncoder().encode(message); // 文字列をUint8Arrayにエンコード
+            const hashBuffer = await crypto.subtle.digest('SHA-256', msgUint8); // ハッシュを計算
+            const hashArray = Array.from(new Uint8Array(hashBuffer)); // バッファを配列に変換
+            const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join(''); // 16進数文字列に変換
+            return hashHex;
+        };
+
+
+
+        /**
+         * 観測点名から市町村名（政令指定都市の区まで含む）を抽出する
+         * @param {string} addr - 観測点名 (point.addr)
+         * @returns {string} 集約された市町村名（区まで含む）
+         */
+        const getMunicipality = (addr) => {
+            if (!addr) return '観測点名不明';
+
+            // 1. 行政区画名（市、区、郡、町、村）までを抽出し、その後の詳細な観測点固有の名称を切り捨てる
+            // 例: '神奈川県横浜市港北区日吉本町' -> '神奈川県横浜市港北区'
+            const match = addr.match(/.*(市|区|郡|町|村)/);
+            
+            let municipalLevel = addr;
+            if (match) {
+                municipalLevel = match[0];
+            } else {
+                 // 行政区画名が見つからない場合は、スペースがあればその手前を採用
+                 return addr.split(' ')[0] || addr;
+            }
+
+
+            // 2. 都府県名を除去する (例: '茨城県日立市' -> '日立市')
+            const lastPrefectureIndex = Math.max(
+                municipalLevel.lastIndexOf('都'),
+                municipalLevel.lastIndexOf('道'),
+                municipalLevel.lastIndexOf('府'),
+                municipalLevel.lastIndexOf('県')
+            );
+            
+            if (lastPrefectureIndex !== -1 && (municipalLevel.length - (lastPrefectureIndex + 1) > 0)) {
+                 // 都府県名の末尾の次の文字から最後までを採用
+                municipalLevel = municipalLevel.substring(lastPrefectureIndex + 1); 
+            }
+            // municipalLevel はこれで '横浜市港北区' や '日立市' のような形式になる
+
+            // 3. 区まで含む行政区画名、または市町村名をそのまま返す
+            return municipalLevel;
+        };
+
+
+        // --- データ取得と処理ロジック ---
+
+        /**
+         * P2P地震情報APIからデータを取得し、最大震度3以上の地震にフィルタリングする
+         * @returns {Promise<Array>} 処理された地震情報配列
+         */
+        const fetchEarthquakeData = async () => {
+            if (USE_DUMMY_DATA) {
+                console.warn("★★★ 訓練モード有効 ★★★ ダミーデータを使用しています。テスト後は USE_DUMMY_DATA を false に戻してください。");
+                const dummyData = [
+                    // --- 訓練用の津波情報 (code: 552) ---
+                    {
+                        "code": 552,
+                        "issue": {
+                            "source": "気象庁",
+                            "time": "2025/01/01 12:05:00",
+                            "type": "ScaleAndDestination",
+                            "correct": "None",
+                            "event_id": "20250101120000" // 地震情報と紐付けるID
+                        },
+                        "tsunami": {
+                            "forecasts": [
+                                // 大津波警報
+                                { "grade": "MajorWarning", "area": { "name": "石川県能登" } },
+                                { "grade": "MajorWarning", "area": { "name": "新潟県上中下越" } },
+                                // 津波警報
+                                { "grade": "Warning", "area": { "name": "山形県" } },
+                                { "grade": "Warning", "area": { "name": "兵庫県北部" } },
+                                { "grade": "Warning", "area": { "name": "北海道日本海沿岸南部" } },
+                                // 津波注意報
+                                { "grade": "Advisory", "area": { "name": "京都府" } },
+                                { "grade": "Advisory", "area": { "name": "福井県" } },
+                                { "grade": "Advisory", "area": { "name": "鳥取県" } },
+                                { "grade": "Advisory", "area": { "name": "島根県出雲・石見" } },
+                                { "grade": "Advisory", "area": { "name": "福岡県日本海沿岸" } },
+                                { "grade": "Advisory", "area": { "name": "佐賀県北部" } },
+                                { "grade": "Advisory", "area": { "name": "長崎県壱岐・対馬" } },
+                            ]
+                        }
+                    },
+                    // --- 訓練用の震源・震度情報 (code: 551) ---
+                    {
+                        "code": 551,
+                        "issue": {
+                            "source": "気象庁",
+                            "time": "2025/01/01 12:02:00",
+                            "type": "DetailScale",
+                            "correct": "None",
+                            "event_id": "20250101120000" // 津波情報と紐付けるID
+                        },
+                        "earthquake": {
+                            "time": "2025-01-01T12:00:00+09:00",
+                            "hypocenter": {
+                                "name": "日本海中部",
+                                "latitude": 39.9,
+                                "longitude": 138.6,
+                                "depth": 10,
+                                "magnitude": 8.1
+                            },
+                            "maxScale": 70, // 震度7
+                            "domesticTsunami": "MajorWarning" // 大津波警報
+                        },
+                        "points": [
+                            // 震度7
+                            { "pref": "新潟県", "addr": "新潟県長岡市", "scale": 70, "isArea": true },
+                            // 震度6強
+                            { "pref": "石川県", "addr": "石川県輪島市", "scale": 60, "isArea": true },
+                            { "pref": "山形県", "addr": "山形県鶴岡市", "scale": 60, "isArea": true },
+                            // 震度6弱
+                            { "pref": "新潟県", "addr": "新潟県柏崎市", "scale": 55, "isArea": true },
+                            { "pref": "富山県", "addr": "富山県氷見市", "scale": 55, "isArea": true },
+                            // 震度5強
+                            { "pref": "石川県", "addr": "石川県珠洲市", "scale": 50, "isArea": true },
+                            { "pref": "福井県", "addr": "福井県あわら市", "scale": 50, "isArea": true },
+                            // 震度5弱
+                            { "pref": "秋田県", "addr": "秋田県にかほ市", "scale": 45, "isArea": true },
+                            { "pref": "長野県", "addr": "長野県栄村", "scale": 45, "isArea": true },
+                            // 震度4
+                            { "pref": "福島県", "addr": "福島県会津坂下町", "scale": 40, "isArea": true },
+                            { "pref": "群馬県", "addr": "群馬県草津町", "scale": 40, "isArea": true },
+                            // 震度3
+                            { "pref": "京都府", "addr": "京都府京丹後市", "scale": 30, "isArea": true },
+                            { "pref": "兵庫県", "addr": "兵庫県豊岡市", "scale": 30, "isArea": true },
+                        ]
+                    }
+                ];
+
+                // --- ダミーデータを使って通常の処理フローを実行 ---
+                const tsunamiDetailsMap = new Map();
+                const tsunamiInfos = dummyData.filter(d => d.code === 552);
+                tsunamiInfos.forEach(info => {
+                    const eventId = String(info.issue.event_id || info.issue.eventid);
+                    if (!info.tsunami || !info.tsunami.forecasts) return;
+                    const forecastsByGrade = { 'MajorWarning': new Set(), 'Warning': new Set(), 'Advisory': new Set() };
+                    info.tsunami.forecasts.forEach(forecast => { if (forecastsByGrade[forecast.grade] && forecast.area.name) { forecastsByGrade[forecast.grade].add(forecast.area.name); } });
+                    const grades = Object.keys(forecastsByGrade).filter(grade => forecastsByGrade[grade].size > 0);
+                    let highestGrade = 'None';
+                    if (grades.includes('MajorWarning')) highestGrade = 'MajorWarning'; else if (grades.includes('Warning')) highestGrade = 'Warning'; else if (grades.includes('Advisory')) highestGrade = 'Advisory';
+                    tsunamiDetailsMap.set(eventId, { highestGrade, areas: forecastsByGrade });
+                });
+                const filteredEarthquakes = dummyData.filter(eq => eq.earthquake && eq.earthquake.maxScale >= CONFIG.MIN_LIST_SCALE);
+                PROCESSED_EARTHQUAKES = await Promise.all(filteredEarthquakes.map(eq => processEarthquake(eq, tsunamiDetailsMap)));
+                return PROCESSED_EARTHQUAKES;
+            }
+
+            const loadingElement = document.getElementById('loading');
+            const errorElement = document.getElementById('error-message');
+            const errorTextElement = document.getElementById('error-text');
+            
+            loadingElement.classList.remove('hidden');
+            errorElement.classList.add('hidden');
+            
+            try {
+                // 震度情報(551)と津波情報(552)を別々にリクエスト
+                const url551 = `${CONFIG.API_URL}&codes=551`;
+                const url552 = `${CONFIG.API_URL}&codes=552`;
+
+                const [response551, response552] = await Promise.all([
+                    fetch(url551),
+                    fetch(url552)
+                ]);
+
+                if (!response551.ok) {
+                    throw new Error(`HTTPエラー (震度情報): ${response551.status}`);
+                }
+                if (!response552.ok) {
+                    throw new Error(`HTTPエラー (津波情報): ${response552.status}`);
+                }
+                
+                const data551 = await response551.json();
+                const data552 = await response552.json();
+                const data = [...data551, ...data552];
+
+                // --- 1. 津波情報(552)を先に処理し、event_idごとに最高の警報レベルをマップに保存 ---
+                const tsunamiDetailsMap = new Map();
+                const tsunamiInfos = data.filter(d => d.code === 552);
+
+                tsunamiInfos.forEach(info => {
+                    const eventId = String(info.issue.event_id || info.issue.eventid);
+                    if (!info.tsunami || !info.tsunami.forecasts) return;
+
+                    // 警報レベルごとの沿岸エリアを収集
+                    const forecastsByGrade = {
+                        'MajorWarning': new Set(),
+                        'Warning': new Set(),
+                        'Advisory': new Set()
+                    };
+                    info.tsunami.forecasts.forEach(forecast => {
+                        if (forecastsByGrade[forecast.grade] && forecast.area.name) {
+                            forecastsByGrade[forecast.grade].add(forecast.area.name);
+                        }
+                    });
+
+                    const grades = Object.keys(forecastsByGrade).filter(grade => forecastsByGrade[grade].size > 0);
+                    let highestGrade = 'None';
+                    if (grades.includes('MajorWarning')) highestGrade = 'MajorWarning';
+                    else if (grades.includes('Warning')) highestGrade = 'Warning';
+                    else if (grades.includes('Advisory')) highestGrade = 'Advisory';
+
+                    tsunamiDetailsMap.set(eventId, { highestGrade, areas: forecastsByGrade });
+                });
+
+                // 最大震度3以上の地震のみをフィルタリング (CONFIG.MIN_LIST_SCALEを使用)
+                const filteredEarthquakes = data.filter(eq => 
+                    eq.earthquake && eq.earthquake.maxScale >= CONFIG.MIN_LIST_SCALE
+                );
+
+                // 「イベントキー」を元に重複排除・集約
+                const uniqueEarthquakesMap = new Map();
+                for (const eq of filteredEarthquakes) {
+                    // 発生時刻と震源地名から安定したイベントキーを生成
+                    const eventTime = eq.earthquake?.time; // ★基準を地震発生時刻に変更
+                    const epicenterName = eq.earthquake?.hypocenter?.name;
+
+                    // ID生成に必要な情報がなければスキップ
+                    if (!eventTime || !epicenterName) continue; 
+
+                    const eventKey = `${eventTime}_${epicenterName}`;
+
+                    if (uniqueEarthquakesMap.has(eventKey)) {
+                        // 既に同じ地震イベントが存在する場合、情報をマージする
+                        const existingEq = uniqueEarthquakesMap.get(eventKey);
+                        // ★★★ 観測点(points)データを持つ情報を優先するロジック ★★★
+                        if (!existingEq.points && eq.points) { // 既存にpointsがなく、新しい方にあれば
+                            uniqueEarthquakesMap.set(eventKey, eq); // 新しい情報で上書きする
+                        }
+                        // 震源情報がより詳細なら更新する（マグニチュードが不明から判明した場合など）
+                        if ((existingEq.earthquake.hypocenter.magnitude === -1 || existingEq.earthquake.hypocenter.magnitude === null) && (eq.earthquake.hypocenter.magnitude !== -1 && eq.earthquake.hypocenter.magnitude !== null)) {
+                            existingEq.earthquake.hypocenter = eq.earthquake.hypocenter;
+                        }
+                        // 最大震度が更新された場合
+                        if (eq.earthquake.maxScale > existingEq.earthquake.maxScale) {
+                            existingEq.earthquake.maxScale = eq.earthquake.maxScale;
+                        }
+                    } else {
+                        // 新しい地震イベントとして追加
+                        uniqueEarthquakesMap.set(eventKey, eq);
+                    }
+                }
+                
+                const uniqueEarthquakes = Array.from(uniqueEarthquakesMap.values());
+
+                // 処理済みのデータセットをグローバル変数に格納
+                // ここでは描画モードに関わらず、全ての情報を保持
+                PROCESSED_EARTHQUAKES = await Promise.all(uniqueEarthquakes.map(eq => processEarthquake(eq, tsunamiDetailsMap)));
+
+                // 新しい地震データをスプレッドシートに記録
+                if (PROCESSED_EARTHQUAKES.length > 0) {
+                    logToSpreadsheet(PROCESSED_EARTHQUAKES);
+                    logPointsToSpreadsheet(PROCESSED_EARTHQUAKES);
+                }
+                return PROCESSED_EARTHQUAKES;
+
+            } catch (error) {
+                console.error('地震情報の取得中にエラー:', error);
+                errorTextElement.textContent = `データの取得に失敗しました: ${error.message}`;
+                errorElement.classList.remove('hidden');
+                return [];
+            } finally {
+                loadingElement.classList.add('hidden');
+            }
+        };
+
+        /**
+         * 地震データをGoogle Apps Scriptに送信してスプレッドシートに記録する
+         * @param {Array} earthquakes - 処理済みの地震情報配列
+         */
+        const logToSpreadsheet = async (earthquakes) => {
+            const url = CONFIG.GAS_WEB_APP_URL;
+            if (!url) {
+                console.log('GAS_WEB_APP_URLが設定されていないため、スプレッドシートへの記録をスキップしました。');
+                return;
+            }
+
+            try {
+                const response = await fetch(url, {
+                    method: 'POST',
+                    mode: 'no-cors', // CORSエラーを回避するために必要
+                    cache: 'no-cache',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(earthquakes)
+                });
+                console.log('スプレッドシートへの記録リクエストを送信しました。');
+            } catch (error) {
+                console.error('スプレッドシートへの記録中にエラーが発生しました:', error);
+            }
+        };
+
+        /**
+         * 観測点データをGoogle Apps Scriptに送信してスプレッドシートに記録する
+         * @param {Array} earthquakes - 処理済みの地震情報配列
+         */
+        const logPointsToSpreadsheet = (earthquakes) => {
+            const url = CONFIG.GAS_POINTS_WEB_APP_URL;
+            if (!url) { 
+                console.log('GAS_POINTS_WEB_APP_URLが設定されていないため、観測点情報の記録をスキップしました。');
+                return;
+            } 
+
+            // 地震ごとに観測点データを分割して送信する
+            earthquakes.forEach(eq => {
+                // 震度1以上の観測点のみを抽出
+                const allPoints = eq.points?.filter(p => p.scale >= 10) || [];
+
+                if (allPoints.length > 0) {
+                    // 震度階級の大きい順に並び替え、上位40件に制限
+                    const sortedAndLimitedPoints = allPoints
+                        .sort((a, b) => b.scale - a.scale)
+                        .slice(0, 40);
+
+                    // 各観測点データに、関連する地震IDを追加 
+                    const payload = sortedAndLimitedPoints.map(point => ({ ...point, earthquakeId: eq.id }));
+
+                    // 非同期で送信処理を実行（awaitしないことで、次の地震の処理をブロックしない）
+                    fetch(url, {
+                        method: 'POST',
+                        mode: 'no-cors', // CORSエラーを回避
+                        cache: 'no-cache',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    })
+                    .then(() => {
+                        console.log(`地震ID: ${eq.id} の観測点データ(${payload.length}件)の記録リクエストを送信しました。`);
+                    })
+                    .catch(error => {
+                        console.error(`地震ID: ${eq.id} の観測点データ記録中にエラーが発生しました:`, error);
+                    });
+                }
+            });
+        };
+
+        /**
+         * 個別の地震情報オブジェクトを処理し、描画に必要な基本情報と生のpointsデータを格納する
+         * @param {Object} earthquake - APIから取得した単一の地震情報オブジェクト
+         * @returns {Object} 処理後の整形済み地震情報
+         */
+        const processEarthquake = async (earthquake, tsunamiDetailsMap) => {
+            // --- 安定したID生成ロジック ---
+            const eqData = earthquake.earthquake;
+            const idSource = `${eqData.time}_${eqData.hypocenter.name}`; // ★基準を地震発生時刻に変更
+            const syntheticId = await digestMessage(idSource);
+            // -------------------------
+
+            // API提供のeventidは津波情報の紐付けにのみ利用
+            const eventId = String(earthquake.issue?.event_id || earthquake.issue?.eventid);
+            const tsunamiData = tsunamiDetailsMap.get(eventId);
+            const detailedTsunamiGrade = tsunamiData ? tsunamiData.highestGrade : earthquake.earthquake.domesticTsunami;
+
+            const getTsunamiInfo = (grade) => {
+                switch (grade) {
+                    case 'MajorWarning':
+                        return { label: '大津波警報', class: 'tsunami-major-warning' };
+                    case 'Warning':
+                        return { label: '津波警報', class: 'tsunami-warning-detailed' };
+                    case 'Advisory':
+                        return { label: '津波注意報', class: 'tsunami-advisory' };
+                    case 'None':
+                        return { label: '津波なし', class: 'tsunami-none' };
+                    case 'Checking':
+                        return { label: '調査中', class: 'tsunami-checking' };
+                    default:
+                        return { label: '', class: 'hidden' }; // それ以外は非表示
+                }
+            };
+            const tsunamiInfo = getTsunamiInfo(detailedTsunamiGrade);
+            
+            // 津波予報のエリア情報を取得
+            const tsunamiForecastAreas = tsunamiData ? {
+                'MajorWarning': Array.from(tsunamiData.areas.MajorWarning || []),
+                'Warning': Array.from(tsunamiData.areas.Warning || []),
+                'Advisory': Array.from(tsunamiData.areas.Advisory || [])
+            } : null;
+
+            // レポートに基づきマグニチュードの取得方法を修正
+            const magValue = earthquake.earthquake?.hypocenter?.magnitude;
+            const magnitudeDisplay = (magValue !== undefined && magValue !== null && !isNaN(magValue)) 
+                ? parseFloat(magValue).toFixed(1) 
+                : '不明';
+
+            // ★★★ 震度階級別に「観測点名」をグループ化する処理を追加 ★★★
+            const shindoPoints = {
+                '70': [], '60': [], '55': [], '50': [], '45': [], '40': [], '30': [], '20': [], '10': []
+            };
+
+            if (earthquake.points && Array.isArray(earthquake.points)) {
+                earthquake.points.forEach(point => {
+                    // point.scale (e.g., 30) が shindoPoints のキーとして存在するかチェック
+                    if (shindoPoints.hasOwnProperty(point.scale)) {
+                        // 観測点名(addr)を該当する震度階級の配列に追加
+                        shindoPoints[point.scale].push(point.addr);
+                    }
+                });
+            }
+
+            // 必要な情報を整形して返す。pointsデータはrawPointsとして保存し、描画時に処理する
+            return {
+                id: syntheticId,
+                time: formatDateTime(earthquake.earthquake.time), // ★表示も地震発生時刻に変更
+                epicenter: earthquake.earthquake.hypocenter.name || '不明',
+                depth: earthquake.earthquake.hypocenter.depth, // 震源の深さを追加
+                magnitude: magnitudeDisplay,
+                tsunami: earthquake.earthquake.domesticTsunami, // 津波の有無を追加
+                tsunamiLabel: tsunamiInfo.label,
+                tsunamiClass: tsunamiInfo.class,
+                tsunamiForecastAreas: tsunamiForecastAreas, // 津波予報エリア情報を追加
+                maxShindoLabel: scaleToShindo(earthquake.earthquake.maxScale).label,
+                maxShindoClass: scaleToShindo(earthquake.earthquake.maxScale).class,
+                maxScale: earthquake.earthquake.maxScale, // 最大震度を数値で保持
+                points: earthquake.points, // 生の観測点データを保持
+                shindoPoints: shindoPoints, // ★★★ グループ化した観測点データを追加 ★★★
+            };
+        };
+
+
+        // --- UIレンダリングロジック ---
+        
+        // 最後に選択されたカードのIDを保持
+        let selectedCardId = null;
+
+        /**
+         * 震度ラベルの文字列からクラス名を取得する
+         */
+        const shindoLabelToClass = (label) => {
+            // ラベルが「震度」で始まっているため、クラスマップのキーも更新
+            const classMap = {
+                '震度7': 'shindo-7', '震度6強': 'shindo-6-plus', '震度6弱': 'shindo-6-minus', 
+                '震度5強': 'shindo-5-plus', '震度5弱': 'shindo-5-minus', '震度4': 'shindo-4',
+                '震度3': 'shindo-3', '震度2': 'shindo-2', '震度1': 'shindo-1',
+                '概況': 'bg-gray-500 text-white', // 概況ビュー用
+                '情報なし': 'bg-gray-600 text-white', // データなし用
+                '不明': 'bg-gray-400 text-white'
+            };
+            // 実際のラベルは '震度7' などの形式になっているため、ここでクラスを取得する
+            return classMap[label] || 'bg-gray-400 text-white';
+        };
+
+        /**
+         * 地震観測点データを震度と表示モードに基づいてグループ化する
+         * @param {Array} rawPoints - 地震情報オブジェクトの points 配列
+         * @param {string} mode - 'point' (観測点別) または 'municipality' (市区町村別)
+         * @returns {Array} 震度別・モード別にグループ化されたデータ
+         */
+        const groupPointsByShindoAndMode = (rawPoints, mode, minScale) => {
+            const shindoGroup = {}; 
+
+            if (!rawPoints || !Array.isArray(rawPoints)) return [];
+
+            rawPoints.forEach(point => {
+                // 指定された最低震度以上の観測点を含める
+                if (point.scale >= minScale) {
+                    const shindoLabel = scaleToShindo(point.scale).label;
+                    
+                    let name;
+                    if (mode === 'municipality') {
+                        name = getMunicipality(point.addr); // 市区町村名に絞り込み（区まで含む）
+                    } else {
+                        name = point.addr || '観測点名不明'; // 観測点名全体
+                    }
+
+                    if (!shindoGroup[shindoLabel]) {
+                        shindoGroup[shindoLabel] = new Set(); // 重複防止のためにSetを使用
+                    }
+                    shindoGroup[shindoLabel].add(name);
+                }
+            });
+
+            // 震度ラベルを降順にソート
+            const sortedShindoKeys = Object.keys(shindoGroup).sort((a, b) => {
+                return (SHINDO_SORT_ORDER[b] || 0) - (SHINDO_SORT_ORDER[a] || 0);
+            });
+            
+            // SetをArrayに変換し、日本語ロケールを使用して五十音順にソート
+            return sortedShindoKeys.map(key => ({
+                shindo: key,
+                cities: Array.from(shindoGroup[key]).sort((a, b) => a.localeCompare(b, 'ja')) 
+            }));
+        };
+
+
+        /**
+         * 地震一覧のリストアイテムをレンダリングする
+         * @param {Object} eq - 整形済み地震情報オブジェクト
+         * @returns {string} HTML文字列
+         */
+        const renderEarthquakeListItem = (eq) => {
+            // ダークモード対応: p-3 -> py-3 px-2 に変更 (左右のパディングを半減)
+            return `
+                <div id="card-${eq.id}" 
+                     class="earthquake-card py-3 px-2 rounded-lg shadow-sm border-l-4 border-gray-700 bg-gray-700 hover:bg-gray-600 transition duration-150 cursor-pointer"
+                     data-event-id="${eq.id}">
+                    <div class="flex justify-between items-start">
+                        <div class="flex-grow truncate pr-2">
+                            <p class="text-sm font-medium text-gray-100">${eq.epicenter}</p>
+                            <p class="text-xs text-gray-400">${eq.time}</p>
+                        </div>
+                        <div class="flex flex-col items-end space-y-1 flex-shrink-0">
+                            <span class="shindo-badge ${eq.maxShindoClass} text-xs">${eq.maxShindoLabel}</span>
+                            <span class="tsunami-badge ${eq.tsunamiClass}">${eq.tsunamiLabel}</span>
+                        </div>
+                    </div>
+                </div>
+            `;
+        };
+
+        /**
+         * 地震詳細パネルの内容をレンダリングする
+         * @param {Object} eq - 整形済み地震情報オブジェクト
+         */
+        const displayEarthquakeDetails = (eq) => {
+            const detailContainer = document.getElementById('detail-content');
+            const detailTitle = document.getElementById('detail-panel-title');
+            
+            // データ存在の防御的チェック
+            if (!eq || !eq.points) {
+                 // ダークモード対応: text-gray-500 -> text-gray-400
+                 detailContainer.innerHTML = `
+                    <div class="text-center p-8 text-gray-400">
+                        <svg class="w-12 h-12 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4h18M3 8h18m-6 4h6m-6 4h6M3 12h2M3 16h2"></path></svg>
+                        <p>この地震の詳細データは読み込めませんでした。リストから再度選択してください。</p>
+                    </div>
+                `;
+                console.error('Error: Earthquake data or points is missing.', eq);
+                // 固定バーもクリア
+                detailTitle.textContent = '地震詳細'; // タイトルをリセット
+                updateFixedShindoBar(null);
+                return;
+            }
+
+            // 津波の有無に応じてタイトルを変更
+            const hasTsunamiWarning = ['大津波警報', '津波警報', '津波注意報'].includes(eq.tsunamiLabel);
+            if (hasTsunamiWarning) {
+                detailTitle.textContent = '地震・津波詳細';
+            } else {
+                detailTitle.textContent = '地震詳細';
+            }
+
+
+            // 現在のDISPLAY_MODEに基づいてデータをグループ化
+            const shindoByMode = groupPointsByShindoAndMode(eq.points, DISPLAY_MODE, CONFIG.MIN_DETAIL_SCALE);
+
+            // 詳細セクションの震度別リストを生成
+            const detailList = shindoByMode.map(item => `
+                <!-- ダークモード対応: bg-gray-50 -> bg-gray-700, border-gray-100 -> border-gray-600 -->
+                <div class="mb-4 p-4 bg-gray-700 rounded-lg border border-gray-600">
+                    <div class="flex items-center mb-2">
+                        <!-- 震度ラベル -->
+                        <span class="shindo-badge ${shindoLabelToClass(item.shindo)} text-base">${item.shindo}</span>
+                        <!-- 地域数を表示する元の記述を復元 -->
+                        <span class="text-sm text-gray-400 ml-4">（${item.cities.length} 地域）</span>
+                    </div>
+                    <!-- 市町村名/観測点名 -->
+                    <!-- city-list-no-break クラスを追加して、単語内改行を防ぐ -->
+                    <p class="text-lg font-semibold text-gray-200 leading-relaxed pt-2 mt-2 border-t border-gray-600 city-list-no-break">
+                        ${item.cities.join('　')} <!-- 読点(、)を全角スペース(　)に変更 -->
+                    </p>
+                </div>
+            `).join('');
+
+            // ラベルを '市区町村別' または '観測点別' に統一
+            const modeLabel = DISPLAY_MODE === 'municipality' ? '市区町村別' : '観測点別'; 
+
+            const html = `
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-2xl font-bold text-white">${eq.epicenter}</h3>
+                    <div class="flex-shrink-0 ml-4">
+                        <span class="shindo-badge ${eq.maxShindoClass} text-base">${eq.maxShindoLabel}</span>
+                    </div>
+                </div>
+                <!-- ダークモード対応: text-gray-600 -> text-gray-300, border-b -> border-b border-gray-700 -->
+                <div class="flex flex-wrap gap-x-6 gap-y-2 mb-6 text-sm text-gray-300 border-b border-gray-700 pb-4">
+                    <p><strong>発生日時:</strong> ${eq.time}</p>
+                    <p><strong>震源の深さ:</strong> ${eq.depth === 0 ? 'ごく浅い' : (eq.depth > 0 ? `約${eq.depth}km` : '不明')}</p>
+                    <p><strong>マグニチュード:</strong> M${eq.magnitude}</p>
+                    <p><strong>津波の有無:</strong> 
+                        ${(() => {
+                            switch (eq.tsunamiLabel) {
+                                case '大津波警報': return '<span class="font-bold text-purple-400">大津波警報を発表中です</span>';
+                                case '津波警報': return '<span class="font-bold text-red-500">津波警報を発表中です</span>';
+                                case '津波注意報': return '<span class="font-bold text-yellow-400">津波注意報を発表中です</span>';
+                                case '津波なし': return 'この地震による津波の心配はありません';
+                                case '調査中': return '現在 気象庁が調査中です';
+                                default: return '不明';
+                            }
+                        })()}
+                    </p>
+                </div>
+                
+                ${(() => {
+                    if (!eq.tsunamiForecastAreas || (eq.tsunamiForecastAreas.MajorWarning.length === 0 && eq.tsunamiForecastAreas.Warning.length === 0 && eq.tsunamiForecastAreas.Advisory.length === 0)) {
+                        return '';
+                    }
+                    const renderAreaList = (areas, title, badgeClass) => {
+                        if (!areas || areas.length === 0) return '';
+                        return `
+                            <div class="mt-3">
+                                <h5 class="flex items-center text-base font-bold text-gray-200 mb-2">
+                                    <span class="tsunami-badge ${badgeClass} mr-2">${title}</span>
+                                    <span>発表中の沿岸</span>
+                                </h5>
+                                <p class="text-lg font-semibold text-gray-200 leading-relaxed city-list-no-break">
+                                    ${areas.join('　')}
+                                </p>
+                            </div>
+                        `;
+                    };
+                    return `
+                        ${renderAreaList(eq.tsunamiForecastAreas.MajorWarning, '大津波警報', 'tsunami-major-warning')}
+                        ${renderAreaList(eq.tsunamiForecastAreas.Warning, '津波警報', 'tsunami-warning-detailed')}
+                        ${renderAreaList(eq.tsunamiForecastAreas.Advisory, '津波注意報', 'tsunami-advisory')}
+                    `;
+                })()}
+                ${(() => {
+                    if (!eq.tsunamiForecastAreas || (eq.tsunamiForecastAreas.MajorWarning.length === 0 && eq.tsunamiForecastAreas.Warning.length === 0 && eq.tsunamiForecastAreas.Advisory.length === 0)) return '';
+                    return '<hr class="my-6 border-gray-600">';
+                })()}
+
+                <!-- ダークモード対応: text-gray-700 -> text-gray-200 -->
+                <h4 class="text-lg font-bold text-gray-200 mb-3">震度別観測地点 (${modeLabel})</h4>
+                <!-- ダークモード対応: text-gray-500 -> text-gray-400 -->
+                ${shindoByMode.length > 0 ? detailList : '<p class="text-sm text-gray-400">観測データがありません。</p>'}
+            `;
+
+            detailContainer.innerHTML = html;
+            
+            // --- 固定バーの更新 ---
+            updateFixedShindoBar(eq);
+        };
+
+
+        /**
+         * 全ての地震情報をリストコンテナに表示し、イベントリスナーを設定する
+         * @param {Array} processedEarthquakes - 処理済みの地震情報配列
+         */
+        const displayEarthquakes = (processedEarthquakes) => {
+            const listContainer = document.getElementById('earthquake-list');
+            const noDataElement = document.getElementById('no-data');
+            listContainer.innerHTML = '';
+            
+            // 選択状態をリセット
+            selectedCardId = null;
+
+            if (processedEarthquakes.length === 0) {
+                noDataElement.classList.remove('hidden');
+                 // データがない場合は詳細パネルと固定バーを初期状態に戻す
+                document.getElementById('detail-content').innerHTML = `
+                    <div class="text-center p-8 text-gray-400">
+                        <svg class="w-12 h-12 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4h18M3 8h18m-6 4h6m-6 4h6M3 12h2M3 16h2"></path></svg>
+                        <p>左側のリストから地震を選択してください。</p>
+                    </div>
+                `;
+                updateFixedShindoBar(null); // 固定バーをクリア
+                return;
+            }
+            
+            noDataElement.classList.add('hidden');
+            
+            // リストアイテムHTMLを生成して挿入
+            const cardsHtml = processedEarthquakes.map(renderEarthquakeListItem).join('');
+            listContainer.innerHTML = cardsHtml;
+
+            // イベントリスナーの設定
+            listContainer.querySelectorAll('.earthquake-card').forEach(card => {
+                
+                card.addEventListener('click', (e) => {
+                    const clickedCard = e.currentTarget;
+                    const eventId = clickedCard.getAttribute('data-event-id');
+                    
+                    // --- 選択状態のハイライトを解除 ---
+                    document.querySelectorAll('.earthquake-card.selected').forEach(selectedCard => {
+                        // ダークモード対応: 選択解除時のクラス変更
+                        selectedCard.classList.remove('selected', 'border-blue-400', 'bg-blue-900/50');
+                        selectedCard.classList.add('border-gray-700', 'bg-gray-700');
+                    });
+                    
+                    // PROCESSED_EARTHQUAKES内のIDは既に文字列なので、厳密比較で正しいデータを取得
+                    const eqData = PROCESSED_EARTHQUAKES.find(eq => eq.id === eventId); 
+
+                    // 今回クリックされたカードを選択状態にする (ダークモード対応)
+                    clickedCard.classList.add('selected', 'border-blue-400', 'bg-blue-900/50');
+                    clickedCard.classList.remove('border-gray-700', 'bg-gray-700');
+                    
+                    selectedCardId = clickedCard.id;
+
+                    // 詳細パネルの表示
+                    displayEarthquakeDetails(eqData);
+                });
+            });
+            
+            // 最初の地震を自動的に選択し、詳細を直接表示する
+            if (processedEarthquakes.length > 0) {
+                const firstEq = processedEarthquakes[0];
+                const firstCardId = `card-${firstEq.id}`;
+                const firstCard = document.getElementById(firstCardId);
+
+                if (firstCard) {
+                    // ハイライトを設定 (ダークモード対応)
+                    firstCard.classList.add('selected', 'border-blue-400', 'bg-blue-900/50');
+                    firstCard.classList.remove('border-gray-700', 'bg-gray-700');
+                    selectedCardId = firstCard.id;
+                    
+                    // 詳細を直接表示
+                    displayEarthquakeDetails(firstEq);
+                } else {
+                    // 要素が見つからなかった場合でも、データがあれば詳細表示だけは試みる
+                    displayEarthquakeDetails(firstEq);
+                }
+            }
+        };
+
+        /**
+         * データを手動で更新する（API呼び出しとUI再描画）
+         */
+        const refreshData = async () => {
+            // ループ再生中はAPIの自動更新をスキップする
+            if (isAutoplaying) return;
+
+            const refreshButton = document.getElementById('refresh-button');
+            const buttonTextSpan = document.getElementById('refresh-text');
+            const fetchTimeDisplay = document.getElementById('fetch-time-display');
+            
+            // 更新前の地震IDリストを保持
+            const idsBefore = PROCESSED_EARTHQUAKES.map(eq => eq.id).sort();
+
+            if (!refreshButton || !buttonTextSpan || !fetchTimeDisplay) return;
+
+            // 1. Loading/Disable state
+            refreshButton.disabled = true;
+            refreshButton.classList.add('opacity-50', 'cursor-not-allowed');
+            const originalText = buttonTextSpan.textContent;
+
+            // 2. Fetch and Display
+            const earthquakes = await fetchEarthquakeData();
+            displayEarthquakes(earthquakes);
+
+            // 3. 地震データに変化があったかチェックし、自動再生を開始
+            const idsAfter = earthquakes.map(eq => eq.id).sort();
+            const hasChanged = JSON.stringify(idsBefore) !== JSON.stringify(idsAfter);
+
+            if (hasChanged && !isAutoplaying) {
+                // 新しい地震がリストの先頭に来るように、displayEarthquakesがソートしていることを前提とする
+                if (earthquakes.length > 0) {
+                    console.log('新しい地震データを検知しました。自動再生を開始します。');
+                    startAutoplay();
+                }
+            }
+            
+            // 3. API取得に成功し、UIが更新された場合（エラーメッセージが表示されていない場合）のみ、取得日時を更新
+            const isErrorDisplayed = !document.getElementById('error-message').classList.contains('hidden');
+
+            if (!isErrorDisplayed) {
+                // 日本時間として現在時刻を取得し、フォーマット
+                const now = new Date(); 
+                LAST_FETCH_TIME = formatCurrentTime(now);
+                fetchTimeDisplay.textContent = `最終取得日時: ${LAST_FETCH_TIME}`;
+            }
+
+            // 4. Complete state
+            buttonTextSpan.textContent = '更新完了!'; // 一時的に更新完了を表示
+
+            // 5. Re-enable and reset text
+            setTimeout(() => {
+                buttonTextSpan.textContent = originalText; // 元のテキストに戻す ('API更新')
+                refreshButton.disabled = false;
+                refreshButton.classList.remove('opacity-50', 'cursor-not-allowed');
+            }, 1000);
+        };
+
+
+        // --- 固定フッターのロジック ---
+
+        /**
+         * 固定フッター（配信画面用）を更新する
+         * @param {Object} eq - 現在選択されている地震情報オブジェクト
+         */
+        const updateFixedShindoBar = (eq) => {
+            const shindoNav = document.getElementById('shindo-nav');
+
+            if (!eq || !eq.points) {
+                // 初期状態 / データなし
+                FIXED_BAR_VIEWS = [];
+                shindoNav.style.display = 'none';
+                displayInitialFixedBarState();
+                pauseAutoplay(); // 自動送りを停止
+                return;
+            }
+            
+            const contentLine1 = document.getElementById('content-line-1');
+            const shindoGroups = groupPointsByShindoAndMode(eq.points, 'municipality', loopPlaybackMinScale);
+            FIXED_BAR_VIEWS = []; 
+            
+            // --- 1. 概況ページの生成 (指定箇所での分割ロジック) ---
+            const [datePart, timePart] = eq.time.split(' '); // "YYYY/MM/DD", "HH:mm"
+            const today = new Date();
+            const eqDate = new Date(datePart);
+            let displayTime;
+            const formattedTimeForTelop = formatTimeForTelop(timePart); // 「午前/午後 X時Y分」形式
+
+            if (today.getFullYear() === eqDate.getFullYear() &&
+                today.getMonth() === eqDate.getMonth() &&
+                today.getDate() === eqDate.getDate()) {
+                displayTime = `${formattedTimeForTelop}ごろ`; // 今日の場合は時刻のみ
+            } else {
+                const [_, month, day] = datePart.split('/');
+                displayTime = `${parseInt(month, 10)}月${parseInt(day, 10)}日 ${formattedTimeForTelop}ごろ`; // 今日でない場合は日付も表示
+            }
+
+            // 1-1. 地震発生情報のページ生成
+            const text1 = `${displayTime} ${eq.epicenter}を震源とする 最大${eq.maxShindoLabel}の地震がありました`;
+            if (!doesTextFitInTwoLines(text1, contentLine1)) {
+                const part1 = `${displayTime} ${eq.epicenter}を震源とする`;
+                const part2 = `最大${eq.maxShindoLabel}の地震がありました`;
+                FIXED_BAR_VIEWS.push({ type: 'summary', shindo: '概況', line1: part1, line2: '', shindoClass: 'bg-gray-500 text-white' });
+                FIXED_BAR_VIEWS.push({ type: 'summary', shindo: '概況', line1: part2, line2: '', shindoClass: 'bg-gray-500 text-white' });
+            } else {
+                FIXED_BAR_VIEWS.push({ type: 'summary', shindo: '概況', line1: text1, line2: '', shindoClass: 'bg-gray-500 text-white' });
+            }
+
+            // 1-2. 震源・マグニチュード情報のページ生成
+            if (eq.magnitude !== '不明') {
+                const depthText = eq.depth === 0 ? ' ごく浅い　' : (eq.depth > 0 ? `およそ${eq.depth}km　` : '不明');
+                const magnitudeText = `地震の規模は マグニチュード${eq.magnitude}`;
+                const text2 = `震源の深さは${depthText}${magnitudeText}`;
+                if (!doesTextFitInTwoLines(text2, contentLine1)) {
+                    const part1 = `震源の深さは${depthText.trim()}`;
+                    const part2 = magnitudeText;
+                    FIXED_BAR_VIEWS.push({ type: 'summary', shindo: '概況', line1: part1, line2: '', shindoClass: 'bg-gray-500 text-white' });
+                    FIXED_BAR_VIEWS.push({ type: 'summary', shindo: '概況', line1: part2, line2: '', shindoClass: 'bg-gray-500 text-white' });
+                } else {
+                    FIXED_BAR_VIEWS.push({ type: 'summary', shindo: '概況', line1: text2, line2: '', shindoClass: 'bg-gray-500 text-white' });
+                }
+            }
+
+            // 3. 津波情報 (利用可能な場合) - 概況ページが生成された後に挿入
+            if (eq.tsunamiLabel) {
+                let tsunamiMessage = '';
+                switch (eq.tsunamiLabel) {
+                    case '大津波警報':
+                        tsunamiMessage = 'この地震で 大津波警報 が発表されています'; // この文言は変更しない
+                        break;
+                    case '津波警報':
+                        tsunamiMessage = 'この地震で 津波警報 が発表されています'; // この文言は変更しない
+                        break;
+                    case '津波注意報':
+                        tsunamiMessage = 'この地震で 津波注意報 が発表されています'; // この文言は変更しない
+                        break;
+                    case '調査中':
+                        tsunamiMessage = '現在 気象庁が調査中です'; // この文言は変更しない
+                        break;
+                    case '津波なし':
+                        tsunamiMessage = 'この地震による津波の心配はありません';
+                        break;
+                }
+
+                if (tsunamiMessage) {
+                    let badgeLabel = eq.tsunamiLabel;
+                    let badgeClass = eq.tsunamiClass;
+
+                    // 固定フッター表示時のみ、「津波なし」「調査中」のバッジを「津 波」に変更し、スタイルを分岐
+                    if (eq.tsunamiLabel === '津波なし' || eq.tsunamiLabel === '調査中') {
+                        badgeLabel = '津 波';
+                        // 「津 波」バッジは角丸長方形にするため、tsunami-telop-badge を付けない
+                        badgeClass = 'tsunami-none'; 
+                    } else {
+                        // 大津波警報・津波警報・津波注意報の場合は長方形にするクラスを追加
+                        badgeClass = `${badgeClass} tsunami-telop-badge`;
+                    }
+
+                    FIXED_BAR_VIEWS.push({
+                        type: 'summary', // 概況と同じタイプ
+                        shindo: badgeLabel,
+                        line1: tsunamiMessage,
+                        line2: '',
+                        shindoClass: badgeClass || 'bg-gray-500 text-white'
+                    });
+                }
+            }
+
+            // 津波予報エリアのページを生成
+            if (eq.tsunamiForecastAreas) {
+                const createTsunamiAreaViews = (areas, title, badgeClass) => {
+                    if (!areas || areas.length === 0) return;
+
+                    let pageAreas = [];
+                    for (let i = 0; i < areas.length; i++) {
+                        const testAreas = [...pageAreas, areas[i]];
+                        const testHtml = `${testAreas.join('　')}`;
+                        if (!doesTextFitInTwoLines(testHtml, contentLine1) && pageAreas.length > 0) {
+                            FIXED_BAR_VIEWS.push({ type: 'summary', shindo: title, line1: `${pageAreas.join('　')}`, line2: '', shindoClass: `${badgeClass} tsunami-telop-badge` });
+                            pageAreas = [areas[i]];
+                        } else {
+                            pageAreas.push(areas[i]);
+                        }
+                    }
+                    if (pageAreas.length > 0) {
+                        FIXED_BAR_VIEWS.push({ type: 'summary', shindo: title, line1: `${pageAreas.join('　')}`, line2: '', shindoClass: `${badgeClass} tsunami-telop-badge` });
+                    }
+                };
+
+                // 警報レベルの高い順にページを生成
+                createTsunamiAreaViews(eq.tsunamiForecastAreas.MajorWarning, '大津波警報', 'tsunami-major-warning');
+                createTsunamiAreaViews(eq.tsunamiForecastAreas.Warning, '津波警報', 'tsunami-warning-detailed');
+                createTsunamiAreaViews(eq.tsunamiForecastAreas.Advisory, '津波注意報', 'tsunami-advisory');
+            }
+
+
+            // --- 4. 「各地の震度は〜」ページの生成 ---
+            const finalTextView = { type: 'summary', shindo: '震度情報', line1: '各地の震度は次のとおりです', line2: '', shindoClass: 'bg-gray-500 text-white' };
+            FIXED_BAR_VIEWS.push(finalTextView);
+
+            // --- 5. 震度別地域ページの生成 (動的ページ分割) ---
+            shindoGroups.forEach(group => {
+                const cities = group.cities;
+                let pageCities = [];
+
+                for (let i = 0; i < cities.length; i++) {
+                    const testCities = [...pageCities, cities[i]];
+                    const testHtml = testCities.map(c => `<span class="inline-block">${c}</span>`).join('　');
+
+                    if (!doesTextFitInTwoLines(testHtml, contentLine1) && pageCities.length > 0) {
+                        // 収まらなくなったので、直前までの内容でページを作成
+                        const pageHtml = pageCities.map(c => `<span class="inline-block">${c}</span>`).join('　');
+                        FIXED_BAR_VIEWS.push({ type: 'shindo', shindo: group.shindo, line1: pageHtml, line2: '', shindoClass: shindoLabelToClass(group.shindo) });
+                        // 新しいページを開始
+                        pageCities = [cities[i]];
+                    } else {
+                        pageCities.push(cities[i]);
+                    }
+                }
+                // ループ終了後、残りの市区町村で最後のページを作成
+                if (pageCities.length > 0) {
+                    const pageHtml = pageCities.map(c => `<span class="inline-block">${c}</span>`).join('　');
+                    FIXED_BAR_VIEWS.push({ type: 'shindo', shindo: group.shindo, line1: pageHtml, line2: '', shindoClass: shindoLabelToClass(group.shindo) });
+                }
+            });
+
+            // --- 6. 全てのビューにページ番号を付与 ---
+            const totalViews = FIXED_BAR_VIEWS.length;
+            FIXED_BAR_VIEWS.forEach((view, index) => {
+                view.pageCurrent = index + 1;
+                view.pageTotal = totalViews;
+            });
+
+            // --- 7. 表示を更新 ---
+            CURRENT_SHINDO_INDEX = 0; 
+
+            // 地震を選択したら、コントロールボタンを表示し、表示エリアをクリアする
+            const autoplayControls = document.getElementById('autoplay-controls');
+            const line1 = document.getElementById('content-line-1');
+            const currentShindoLabel = document.getElementById('current-shindo-label');
+
+            if (FIXED_BAR_VIEWS.length > 1) {
+                autoplayControls.style.display = 'flex';
+                document.getElementById('reset-display-button').style.display = 'block';
+                document.getElementById('transition-controls').style.display = 'flex';
+                shindoNav.style.display = 'flex';
+            } else {
+                autoplayControls.style.display = 'none';
+                document.getElementById('reset-display-button').style.display = 'none';
+                document.getElementById('transition-controls').style.display = 'none';
+                shindoNav.style.display = 'none';
+            }
+
+            // 表示エリアをクリア
+            line1.textContent = '';
+            document.getElementById('content-line-2').textContent = '';
+            currentShindoLabel.classList.add('hidden');
+        };
+
+        /**
+         * 固定フッターを初期状態に戻す
+         */
+        const displayInitialFixedBarState = () => {
+            const line1 = document.getElementById('content-line-1');
+            const line2 = document.getElementById('content-line-2');
+            const currentShindoLabel = document.getElementById('current-shindo-label');
+            const shindoNav = document.getElementById('shindo-nav');
+            const autoplayControls = document.getElementById('autoplay-controls');
+            const transitionControls = document.getElementById('transition-controls');
+            const resetButton = document.getElementById('reset-display-button');
+
+            // 変更: テキストとバッジを非表示にする
+            line1.textContent = '';
+            line2.textContent = '';
+            currentShindoLabel.classList.add('hidden'); // バッジを隠す
+            shindoNav.style.display = 'none';
+            autoplayControls.style.display = 'none';
+            transitionControls.style.display = 'none';
+            resetButton.style.display = 'none';
+        }
+
+        /**
+         * 震度3以上の観測地点がない場合の固定フッター表示
+         */
+        const displayFixedBarNoShindoData = () => {
+             const line1 = document.getElementById('content-line-1');
+             const line2 = document.getElementById('content-line-2');
+             const currentShindoLabel = document.getElementById('current-shindo-label');
+             const eq = PROCESSED_EARTHQUAKES.find(e => e.id === selectedCardId.substring(5));
+
+             line1.innerHTML = `<span class="text-white">${eq.epicenter}</span> (M${eq.magnitude}, ${eq.time})`;
+             line2.textContent = '震度3以上の観測地点情報はありません。';
+             currentShindoLabel.textContent = '震度情報なし';
+             currentShindoLabel.className = 'shindo-badge text-sm h-7 flex items-center bg-gray-600 text-white';
+        }
+
+        
+        /**
+         * 固定フッター内の震度グループ表示を切り替える
+         */
+        const updateFixedBarDisplay = (overrideView = null, direction = 'none') => {
+            const line1 = document.getElementById('content-line-1');
+            const line2 = document.getElementById('content-line-2');
+            const animationWrapper = document.getElementById('animation-wrapper');
+            const contentWrapper = document.getElementById('content-wrapper');
+            const prevButton = document.getElementById('shindo-prev');
+            const nextButton = document.getElementById('shindo-next');
+            const pageInfo = document.getElementById('shindo-page-info');
+            
+            if (FIXED_BAR_VIEWS.length === 0 && !overrideView) return;
+
+            const currentView = overrideView || FIXED_BAR_VIEWS[CURRENT_SHINDO_INDEX];
+
+            const transitionEffect = document.getElementById('transition-effect').value;
+
+            // --- アニメーション処理 ---
+            if (transitionEffect === 'slide' && direction !== 'none' && !overrideView) {
+                const outClass = direction === 'next' ? 'slide-out-left' : 'slide-out-right';
+                const inClass = direction === 'next' ? 'slide-in-right' : 'slide-in-left';
+
+                // 1. 現在のコンテンツをスライドアウト
+                animationWrapper.classList.add(outClass);
+
+                // 2. アニメーション終了後にコンテンツを更新してスライドイン
+                setTimeout(() => {
+                    renderContent(currentView);
+                    animationWrapper.classList.remove(outClass);
+                    animationWrapper.classList.add(inClass);
+
+                    // 3. スライドインアニメーション終了後にクラスを削除
+                    setTimeout(() => {
+                        animationWrapper.classList.remove(inClass);
+                    }, 250);
+
+                }, 250);
+
+            } else {
+                // カットチェンジ、または初回表示
+                renderContent(currentView);
+            }
+
+            // --- ナビゲーションボタンとページ情報の更新 ---
+            updateNavControls(currentView, overrideView);
+        };
+
+        /**
+         * コンテンツ描画部分を分離
+         * @param {object} view - 表示するビューオブジェクト
+         */
+        const renderContent = (view) => {
+            const line1 = document.getElementById('content-line-1');
+            const line2 = document.getElementById('content-line-2');
+            const currentShindoLabel = document.getElementById('current-shindo-label');
+
+            // 既存のスタイルをリセット
+            line1.className = 'text-edge';
+            line2.className = 'text-xs text-gray-400 hidden';
+
+            // 震度ラベルを更新
+            if (view.type === 'system') {
+                currentShindoLabel.classList.add('hidden');
+            } else {
+                currentShindoLabel.classList.remove('hidden');
+                currentShindoLabel.textContent = view.shindo;
+                currentShindoLabel.className = 'shindo-badge text-3xl h-14 flex items-center justify-center flex-shrink-0 ml-1.5';
+                currentShindoLabel.classList.add(...view.shindoClass.split(' '));
+            }
+            
+            // コンテンツ行を更新
+            line1.innerHTML = view.line1;
+            line2.textContent = view.line2;
+
+            // line1は常に表示、line2は基本非表示
+            line1.classList.remove('hidden');
+            line2.classList.add('hidden');
+            
+            // タイプに応じたスタイル適用
+            if(view.type === 'summary') {
+                line1.classList.add('text-4xl', 'font-bold', 'text-white');
+                line1.classList.remove('truncate');
+                line2.classList.remove('hidden');
+                line2.textContent = view.line2;
+            } else if (view.type === 'shindo') {
+                line1.classList.add('text-4xl', 'font-bold', 'text-white');
+                line1.classList.remove('truncate');
+            } else if (view.type === 'system') {
+                line1.classList.add('text-4xl', 'font-bold', 'text-white', 'text-center');
+            }
+        };
+
+        /**
+         * ナビゲーションコントロール（ボタン、ページ情報）の更新
+         * @param {object} currentView - 現在のビュー
+         * @param {object} overrideView - システムメッセージなどの一時ビュー
+         */
+        const updateNavControls = (currentView, overrideView) => {
+            const prevButton = document.getElementById('shindo-prev');
+            const nextButton = document.getElementById('shindo-next');
+            const pageInfo = document.getElementById('shindo-page-info');
+
+            // ナビゲーションボタンの状態を更新
+            prevButton.disabled = CURRENT_SHINDO_INDEX === 0;
+            nextButton.disabled = CURRENT_SHINDO_INDEX === FIXED_BAR_VIEWS.length - 1;
+
+            // ページ情報の表示を更新
+            if (overrideView) {
+                // システムメッセージ表示中はページ情報を書き換え
+                pageInfo.textContent = `${currentView.pageCurrent}${currentView.pageTotal}`;
+                pageInfo.classList.remove('hidden');
+            } else if (currentView.pageTotal > 1) {
+                let pageHTML = `<span class="inline-block">${currentView.pageCurrent}/${currentView.pageTotal}</span>`;
+                if (isAutoplaying) {
+                    const loopsSelect = document.getElementById('autoplay-loops');
+                    const totalLoops = loopsSelect.value === 'Infinity' ? '∞' : loopsSelect.value;
+                    // ループカウンターは0から始まるので+1する
+                    const currentLoop = autoplayLoopCounter + 1;
+                    pageHTML += ` <span class="inline-block">L:${currentLoop}/${totalLoops}</span>`;
+                }
+                pageInfo.innerHTML = pageHTML;
+                pageInfo.classList.remove('hidden');
+            } else {
+                pageInfo.textContent = '';
+                pageInfo.classList.add('hidden');
+            }
+            prevButton.disabled = isAutoplaying || CURRENT_SHINDO_INDEX === 0;
+            nextButton.disabled = isAutoplaying || CURRENT_SHINDO_INDEX === FIXED_BAR_VIEWS.length - 1;
+        };
+
+        // ナビゲーションボタンのイベントリスナー設定
+        const setupFixedBarNavigation = () => {
+            document.getElementById('shindo-prev').addEventListener('click', () => {
+                if (CURRENT_SHINDO_INDEX > 0) {
+                    pauseAutoplay(); // 手動操作で自動送りを停止
+                    CURRENT_SHINDO_INDEX--;
+                    updateFixedBarDisplay(null, 'prev');
+                }
+            });
+
+            document.getElementById('shindo-next').addEventListener('click', () => {
+                if (CURRENT_SHINDO_INDEX < FIXED_BAR_VIEWS.length - 1) {
+                    pauseAutoplay(); // 手動操作で自動送りを停止
+                    CURRENT_SHINDO_INDEX++;
+                    updateFixedBarDisplay(null, 'next');
+                }
+            });
+        };
+
+        /**
+         * 表示リセットボタンのセットアップ
+         */
+        const setupResetButton = () => {
+            const resetButton = document.getElementById('reset-display-button');
+            resetButton.addEventListener('click', () => {
+                // 1. 自動再生を停止し、UIをリセット
+                pauseAutoplay(true); // skipRedraw = true
+
+                // 2. 表示エリアをクリア
+                document.getElementById('content-line-1').textContent = '';
+                document.getElementById('content-line-2').textContent = '';
+                document.getElementById('current-shindo-label').classList.add('hidden');
+
+                // 3. ページインデックスをリセット
+                CURRENT_SHINDO_INDEX = 0;
+                updateNavControls({}, null); // ページ番号表示などをリセット
+            });
+        };
+
+        /**
+         * キーボードショートカットを設定する
+         */
+        const setupKeyboardShortcuts = () => {
+            // 保存されたループ再生の最低震度を読み込む
+            const savedMinScale = localStorage.getItem('loopPlaybackMinScale');
+            if (savedMinScale) {
+                loopPlaybackMinScale = parseInt(savedMinScale, 10);
+            }
+
+            // 保存された設定を読み込む
+            const savedShortcut = localStorage.getItem('autoplayShortcut');
+            if (savedShortcut) {
+                try {
+                    shortcutSetting = JSON.parse(savedShortcut);
+                } catch (e) {
+                    console.error('ショートカット設定の読み込みに失敗:', e);
+                }
+            }
+
+            window.addEventListener('keydown', (event) => {
+                // テキスト入力中などはショートカットを無効にする
+                if (event.target.tagName === 'INPUT' || event.target.tagName === 'SELECT') {
+                    return;
+                }
+
+                // 設定されたショートカットと一致するかチェック
+                const isCtrlMatch = shortcutSetting.ctrl === event.ctrlKey;
+                const isAltMatch = shortcutSetting.alt === event.altKey;
+                const isShiftMatch = shortcutSetting.shift === event.shiftKey;
+                const isKeyMatch = shortcutSetting.key === event.code;
+
+                if (isCtrlMatch && isAltMatch && isShiftMatch && isKeyMatch) {
+                    event.preventDefault(); // ページのスクロールを防ぐ
+                    const toggleButton = document.getElementById('autoplay-toggle');
+                    // ボタンが表示されている場合のみクリックをトリガー
+                    if (toggleButton && toggleButton.offsetParent !== null) {
+                        toggleButton.click();
+                    }
+                }
+            });
+        };
+
+        /**
+         * ショートカット設定モーダルのセットアップ
+         */
+        const setupShortcutModal = () => {
+            const modal = document.getElementById('shortcut-modal');
+            const openButton = document.getElementById('shortcut-settings-button');
+            const closeButton = document.getElementById('shortcut-modal-close');
+            const closeXButton = document.getElementById('shortcut-modal-close-x');
+            const input = document.getElementById('shortcut-modal-input');
+            const saveButton = document.getElementById('shortcut-modal-save');
+            const minScaleSelect = document.getElementById('loop-min-shindo-select');
+
+            openButton.addEventListener('click', () => {
+                modal.classList.remove('hidden');
+                // 現在の設定値をUIに反映
+                input.value = formatShortcutText(shortcutSetting);
+                minScaleSelect.value = loopPlaybackMinScale;
+                input.focus();
+            });
+
+            const closeModal = () => modal.classList.add('hidden');
+            closeButton.addEventListener('click', closeModal);
+            closeXButton.addEventListener('click', closeModal);
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal) closeModal();
+            });
+
+            input.addEventListener('keydown', (e) => {
+                e.preventDefault();
+                // 修飾キーのみの登録は許可しない
+                if (['Control', 'Alt', 'Shift', 'Meta'].includes(e.key)) return;
+
+                shortcutSetting = {
+                    ctrl: e.ctrlKey,
+                    alt: e.altKey,
+                    shift: e.shiftKey,
+                    key: e.code
+                };
+                input.value = formatShortcutText(shortcutSetting);
+            });
+
+            saveButton.addEventListener('click', () => {
+                // 設定を保存
+                localStorage.setItem('autoplayShortcut', JSON.stringify(shortcutSetting));
+                loopPlaybackMinScale = parseInt(minScaleSelect.value, 10);
+                localStorage.setItem('loopPlaybackMinScale', loopPlaybackMinScale);
+
+                // 現在選択されている地震の表示を新しい設定で更新する
+                if (selectedCardId) {
+                    const eventId = selectedCardId.substring(5); // "card-"を削除
+                    const eqData = PROCESSED_EARTHQUAKES.find(eq => eq.id === eventId);
+                    if (eqData) {
+                        // 新しい設定で固定バーのビューを再生成
+                        updateFixedShindoBar(eqData);
+                    }
+                }
+
+                closeModal();
+            });
+        };
+
+        /**
+         * ショートカット設定オブジェクトを整形された文字列に変換
+         */
+        const formatShortcutText = (setting) => {
+            const parts = [];
+            if (setting.ctrl) parts.push('Ctrl');
+            if (setting.alt) parts.push('Alt');
+            if (setting.shift) parts.push('Shift');
+            
+            let displayKey = setting.key;
+            if (displayKey.startsWith('Key')) {
+                displayKey = displayKey.substring(3); // 'KeyA' -> 'A'
+            } else if (displayKey.startsWith('Digit')) {
+                displayKey = displayKey.substring(5); // 'Digit1' -> '1'
+            } else if (displayKey === 'Space') {
+                displayKey = 'Space';
+            } else if (displayKey.startsWith('Numpad')) {
+                displayKey = `Numpad ${displayKey.substring(6)}`; // 'Numpad1' -> 'Numpad 1'
+            }
+
+            parts.push(displayKey);
+            return parts.join(' + ');
+        };
+
+        /**
+         * 自動ページ送り機能のセットアップ
+         */
+        const setupAutoplayControls = () => {
+            const toggleButton = document.getElementById('autoplay-toggle');
+            const loopsSelect = document.getElementById('autoplay-loops');
+
+            // ループ回数の選択肢を生成
+            for (let i = 1; i <= 10; i++) {
+                const option = document.createElement('option');
+                option.value = i;
+                option.textContent = i;
+                loopsSelect.appendChild(option);
+            }
+            const infiniteOption = document.createElement('option');
+            infiniteOption.value = 'Infinity';
+            infiniteOption.textContent = '∞';
+            loopsSelect.appendChild(infiniteOption);
+            loopsSelect.value = '3'; // デフォルトを3回に変更
+
+            toggleButton.addEventListener('click', () => {
+                if (isAutoplaying) {
+                    pauseAutoplay(true); // 動作を「停止してリセット」に変更
+                } else {
+                    startAutoplay();
+                }
+            });
+        };
+
+        const startAutoplay = async () => {
+            if (isAutoplaying || FIXED_BAR_VIEWS.length <= 1) return;
+
+            // APIの自動更新を一時停止
+            if (refreshIntervalId) {
+                clearInterval(refreshIntervalId);
+                refreshIntervalId = null;
+                console.log('ループ再生開始のため、API自動更新を一時停止します。');
+            }
+
+            const durationInput = document.getElementById('autoplay-duration');
+            const loopsSelect = document.getElementById('autoplay-loops');
+            const playIcon = document.getElementById('play-icon');
+            const pauseIcon = document.getElementById('pause-icon');
+            const toggleSwitch = document.getElementById('toggle-mode');
+            const refreshButton = document.getElementById('refresh-button');
+            const earthquakeList = document.getElementById('earthquake-list');
+            const dummyDataButton = document.getElementById('toggle-dummy-data-button');
+            const toggleLabel = toggleSwitch.closest('label');
+            const duration = (parseInt(durationInput.value, 10) || 10) * 1000;
+            const totalLoops = loopsSelect.value === 'Infinity' ? Infinity : parseInt(loopsSelect.value, 10);
+
+            isAutoplaying = true;
+            autoplayLoopCounter = 0;
+            CURRENT_SHINDO_INDEX = 0; // 常に最初のページから開始
+            // コントロールをロック
+            toggleSwitch.disabled = true;
+            refreshButton.disabled = true;
+            toggleLabel.classList.add('opacity-50', 'cursor-not-allowed');
+            earthquakeList.classList.add('opacity-50', 'pointer-events-none');
+            refreshButton.classList.add('opacity-50', 'cursor-not-allowed');
+            dummyDataButton.disabled = true;
+            dummyDataButton.classList.add('opacity-50', 'cursor-not-allowed');
+
+            playIcon.classList.add('hidden');
+            pauseIcon.classList.remove('hidden');
+
+            // 1. 開始ページ「地震情報」を表示
+            const startView = {
+                type: 'system', shindo: '情報', line1: '地震情報', line2: '',
+                shindoClass: 'bg-blue-600 text-white', pageCurrent: '▶', pageTotal: ''
+            };
+            updateFixedBarDisplay(startView);
+
+            // 2. 最初の情報ページへの遷移を待つ
+            // await new Promise(resolve => setTimeout(resolve, duration));
+            // if (!isAutoplaying) return; // 待機中に停止された場合
+
+            // 3. メインのページ送りを開始
+            // インデックスを-1にリセットし、最初のインターバルで0になるようにする
+            CURRENT_SHINDO_INDEX = -1; 
+            autoplayIntervalId = setInterval(() => {
+                if (!isAutoplaying) return;
+
+                // ページを進める
+                if (CURRENT_SHINDO_INDEX < FIXED_BAR_VIEWS.length - 1) {
+                    CURRENT_SHINDO_INDEX++;
+                } else {
+                    // 最終ページに到達した場合、ループ処理
+                    autoplayLoopCounter++;
+                    if (totalLoops !== Infinity && autoplayLoopCounter >= totalLoops) {
+                        // ループ終了処理
+                        clearInterval(autoplayIntervalId);
+                        autoplayIntervalId = null;
+
+                        // 終了ページを表示
+                        const endView = {
+                            type: 'system', shindo: '情報', line1: '地震情報　終', line2: '',
+                            shindoClass: 'bg-blue-600 text-white', pageCurrent: '■', pageTotal: ''
+                        };
+                        updateFixedBarDisplay(endView);
+
+                        // 指定秒数後に表示をクリアする
+                        setTimeout(() => {
+                            document.getElementById('content-line-1').textContent = '';
+                            document.getElementById('current-shindo-label').classList.add('hidden');
+                            pauseAutoplay(true); // 完全に停止状態に戻す
+                        }, duration);
+                        return;
+                    }
+                    // 次のループの開始に戻る
+                    CURRENT_SHINDO_INDEX = 0;
+                }
+
+                // ページを表示
+                updateFixedBarDisplay(null, 'next');
+            }, duration);
+        };
+
+        const pauseAutoplay = (skipRedraw = false) => {
+            // isAutoplaying が false の場合でも、アイコンの状態をリセットするために処理を続ける場合がある
+            // if (!isAutoplaying) return;
+
+            const playIcon = document.getElementById('play-icon');
+            const pauseIcon = document.getElementById('pause-icon');
+            const toggleSwitch = document.getElementById('toggle-mode');
+            const refreshButton = document.getElementById('refresh-button');
+            const earthquakeList = document.getElementById('earthquake-list');
+            const dummyDataButton = document.getElementById('toggle-dummy-data-button');
+            const toggleLabel = toggleSwitch.closest('label');
+
+            clearInterval(autoplayIntervalId);
+            autoplayIntervalId = null;
+            isAutoplaying = false;
+            playIcon.classList.remove('hidden');
+            pauseIcon.classList.add('hidden');
+
+            // コントロールのロックを解除
+            toggleSwitch.disabled = false;
+            refreshButton.disabled = false;
+            toggleLabel.classList.remove('opacity-50', 'cursor-not-allowed');
+            earthquakeList.classList.remove('opacity-50', 'pointer-events-none');
+            refreshButton.classList.remove('opacity-50', 'cursor-not-allowed');
+            dummyDataButton.disabled = false;
+            dummyDataButton.classList.remove('opacity-50', 'cursor-not-allowed');
+            // アニメーションクラスが残っている場合があるので削除
+            document.getElementById('animation-wrapper').className = 'flex items-center w-full h-full';
+
+            // APIの自動更新を再開
+            if (!refreshIntervalId && CONFIG.REFRESH_INTERVAL_MS > 0 && !isAutoplaying) {
+                refreshIntervalId = setInterval(refreshData, CONFIG.REFRESH_INTERVAL_MS);
+                console.log('ループ再生終了のため、API自動更新を再開します。');
+            }
+
+            if (skipRedraw) return;
+
+            // 停止時に現在のインデックスの表示に戻す
+            if (FIXED_BAR_VIEWS.length > 0) {
+                updateFixedBarDisplay();
+            } else {
+                displayInitialFixedBarState();
+            }
+        };
+
+        // --- 固定フッターのロジック 終了 ---
+
+
+        // --- トグルスイッチのロジック ---
+        const setupToggle = () => {
+            const toggleSwitch = document.getElementById('toggle-mode');
+            // IDはそのまま、テキストが市区町村別と観測点別になっている
+            const labelPoint = document.getElementById('label-point'); // 右側（Checked側）
+            const labelMunicipality = document.getElementById('label-municipality'); // 左側（Unchecked側）
+            
+            const updateDisplayMode = () => {
+                const isChecked = toggleSwitch.checked;
+                
+                // ロジック:
+                // isChecked (FALSE/左) = 市区町村別 ('municipality')
+                // isChecked (TRUE/右) = 観測点別 ('point')
+                DISPLAY_MODE = isChecked ? 'point' : 'municipality';
+
+                // ラベルのスタイルを更新
+                if (isChecked) { 
+                    // TRUE: 観測点別(labelPoint)をアクティブにする
+                    labelPoint.classList.add('font-bold', 'text-blue-400');
+                    labelPoint.classList.remove('text-gray-400', 'font-medium');
+                    
+                    labelMunicipality.classList.remove('font-bold', 'text-blue-400');
+                    labelMunicipality.classList.add('text-gray-400', 'font-medium');
+                } else { 
+                    // FALSE: 市区町村別(labelMunicipality)をアクティブにする
+                    labelPoint.classList.remove('font-bold', 'text-blue-400');
+                    labelPoint.classList.add('text-gray-400', 'font-medium');
+                    
+                    labelMunicipality.classList.add('font-bold', 'text-blue-400');
+                    labelMunicipality.classList.remove('text-gray-400', 'font-medium');
+                }
+
+                // 現在選択されている地震の詳細を再描画
+                if (selectedCardId) {
+                    const eventId = selectedCardId.substring(5); // "card-"を削除
+                    const eqData = PROCESSED_EARTHQUAKES.find(eq => eq.id === eventId);
+                    if (eqData) {
+                        displayEarthquakeDetails(eqData);
+                    }
+                }
+            };
+
+            toggleSwitch.addEventListener('change', updateDisplayMode);
+            
+            // 初期モードの適用 (デフォルトは市区町村別 'municipality')
+            updateDisplayMode(); 
+        };
+
+        /**
+         * 訓練モード切り替えボタンのセットアップ
+         */
+        const setupDummyDataToggle = () => {
+            const toggleButton = document.getElementById('toggle-dummy-data-button');
+            const warningDiv = document.getElementById('dummy-data-warning');
+            const body = document.body;
+
+            toggleButton.addEventListener('click', () => {
+                USE_DUMMY_DATA = !USE_DUMMY_DATA; // モードを反転
+
+                if (USE_DUMMY_DATA) {
+                    toggleButton.textContent = '通常モードへ';
+                    toggleButton.classList.remove('bg-yellow-600', 'hover:bg-yellow-700');
+                    toggleButton.classList.add('bg-red-600', 'hover:bg-red-700');
+                    warningDiv.classList.remove('hidden');
+                    body.classList.add('pt-10'); // 警告バーの高さ分paddingを追加
+                } else {
+                    toggleButton.textContent = '訓練モードへ';
+                    toggleButton.classList.remove('bg-red-600', 'hover:bg-red-700');
+                    toggleButton.classList.add('bg-yellow-600', 'hover:bg-yellow-700');
+                    warningDiv.classList.add('hidden');
+                    body.classList.remove('pt-10');
+                }
+
+                refreshData(); // モードを切り替えたらデータを再読み込み
+            });
+        };
+
+        // --- 初期化 ---
+
+        window.onload = async () => {
+            // トグルスイッチの設定とイベントリスナーの設定
+            setupToggle(); 
+            
+            // リフレッシュボタンのイベントリスナーを設定
+            document.getElementById('refresh-button').addEventListener('click', refreshData);
+
+            // 訓練モード切り替えボタンのセットアップ
+            setupDummyDataToggle();
+            
+            // 固定バーのナビゲーションイベントを設定
+            setupFixedBarNavigation();
+
+            // リセットボタンのセットアップ
+            setupResetButton();
+
+            // トランジション設定コントロールを表示
+            document.getElementById('transition-controls').style.display = 'flex';
+
+            // 自動ページ送り機能のセットアップ
+            setupAutoplayControls();
+            
+            // キーボードショートカットのセットアップ
+            setupKeyboardShortcuts();
+
+            // ショートカット設定モーダルのセットアップ
+            setupShortcutModal();
+
+            // 初回表示: データを取得していない状態のメッセージを設定
+            document.getElementById('fetch-time-display').textContent = '最終取得日時: データを取得していません';
+            
+            // 固定バーを初期状態に設定
+            displayInitialFixedBarState();
+
+            // 初回データ取得を refreshData() で実行
+            await refreshData();
+
+            // 定期的な自動更新を設定
+            refreshIntervalId = setInterval(refreshData, CONFIG.REFRESH_INTERVAL_MS);
+        };
+    </script>
+
+    <!-- ショートカット設定モーダル -->
+    <div id="shortcut-modal" class="fixed inset-0 bg-black bg-opacity-75 z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-gray-800 p-6 rounded-lg shadow-xl w-full max-w-md relative">
+            <h3 class="text-xl font-bold mb-6">設定</h3>
+            <div class="space-y-6">
+                <div>
+                    <label for="shortcut-modal-input" class="block text-sm font-medium text-gray-300 mb-1">再生/停止ショートカット</label>
+                    <p class="text-xs text-gray-400 mb-2">下の入力欄を選択し、設定したいキーの組み合わせを押してください</p>
+                    <input type="text" id="shortcut-modal-input" readonly class="w-full p-2 border rounded-md text-center text-lg font-mono">
+                </div>
+                <div>
+                    <label for="loop-min-shindo-select" class="block text-sm font-medium text-gray-300 mb-1">情報画面に表示する最低震度</label>
+                    <select id="loop-min-shindo-select" class="w-full p-2 border rounded-md text-white" style="background-color: #1f2937; border-color: #4b5563;">
+                        <option value="10">震度1以上</option>
+                        <option value="20">震度2以上</option>
+                        <option value="30" selected>震度3以上</option>
+                        <option value="40">震度4以上</option>
+                        <option value="45">震度5弱以上</option>
+                        <option value="50">震度5強以上</option>
+                        <option value="55">震度6弱以上</option>
+                        <option value="60">震度6強以上</option>
+                        <option value="70">震度7</option>
+                    </select>
+                </div>
+            </div>
+            <div class="flex justify-end mt-6 space-x-3">
+                <button id="shortcut-modal-close" class="bg-gray-600 hover:bg-gray-700 text-white font-semibold py-2 px-4 rounded-lg transition">
+                    キャンセル
+                </button>
+                <button id="shortcut-modal-save" class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg transition">
+                    保存
+                </button>
+            </div>
+            <button id="shortcut-modal-close-x" class="absolute top-3 right-3 text-gray-400 hover:text-white">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+            </button>
+        </div>
+    </div>
+</body>
+</html>
