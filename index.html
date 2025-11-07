@@ -245,6 +245,16 @@
             box-shadow: 0 0 0 2px #1e40af; /* blue-800/50 */
         }
 
+        /* --- 地震一覧のバッジ専用スタイル --- */
+        .list-shindo-badge {
+            font-size: 1rem; /* text-base (16px) */
+        }
+        .list-tsunami-badge {
+            font-size: 0.5rem; /* 8px */
+            padding-top: 0.2rem;
+            padding-bottom: 0.2rem;
+        }
+
 
     </style>
 </head>
@@ -1090,8 +1100,8 @@
                             <p class="text-xs text-gray-400">${eq.time}</p>
                         </div>
                         <div class="flex flex-col items-end space-y-1 flex-shrink-0">
-                            <span class="shindo-badge ${eq.maxShindoClass} text-xs">${eq.maxShindoLabel}</span>
-                            <span class="tsunami-badge ${eq.tsunamiClass}">${eq.tsunamiLabel}</span>
+                            <span class="shindo-badge text-xs ${eq.maxShindoClass}">${eq.maxShindoLabel}</span>
+                            <span class="tsunami-badge list-tsunami-badge ${eq.tsunamiClass}">${eq.tsunamiLabel}</span>
                         </div>
                     </div>
                 </div>
