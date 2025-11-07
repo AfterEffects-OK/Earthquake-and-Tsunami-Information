@@ -646,37 +646,32 @@
          * @returns {string} 集約された市町村名（区まで含む）
          */
         const getMunicipality = (addr) => {
-            if (!addr) return '観測点名不明';
+             if (!addr) return '観測点名不明';
 
-            // 1. 行政区画名（市、区、郡、町、村）までを抽出し、その後の詳細な観測点固有の名称を切り捨てる
-            // 例: '神奈川県横浜市港北区日吉本町' -> '神奈川県横浜市港北区'
-            const match = addr.match(/.*(市|区|郡|町|村)/);
-            
-            let municipalLevel = addr;
-            if (match) {
-                municipalLevel = match[0];
-            } else {
-                 // 行政区画名が見つからない場合は、スペースがあればその手前を採用
-                 return addr.split(' ')[0] || addr;
-            }
+             let remainingAddr = addr;
 
+             // 1. 都道府県名を先に除去する
+             if (remainingAddr.startsWith('東京都')) {
+                remainingAddr = remainingAddr.substring(3);
+             } else if (remainingAddr.startsWith('北海道')) {
+                remainingAddr = remainingAddr.substring(3);
+             } else if (remainingAddr.startsWith('京都府')) {
+                remainingAddr = remainingAddr.substring(3);
+             } else if (remainingAddr.startsWith('大阪府')) {
+                remainingAddr = remainingAddr.substring(3);
+             } else {
+                 // その他の県の場合
+                 const prefIndex = remainingAddr.indexOf('県');
+                 if (prefIndex !== -1) {
+                    remainingAddr = remainingAddr.substring(prefIndex + 1);
+                 }
+             }
 
-            // 2. 都府県名を除去する (例: '茨城県日立市' -> '日立市')
-            const lastPrefectureIndex = Math.max(
-                municipalLevel.lastIndexOf('都'),
-                municipalLevel.lastIndexOf('道'),
-                municipalLevel.lastIndexOf('府'),
-                municipalLevel.lastIndexOf('県')
-            );
-            
-            if (lastPrefectureIndex !== -1 && (municipalLevel.length - (lastPrefectureIndex + 1) > 0)) {
-                 // 都府県名の末尾の次の文字から最後までを採用
-                municipalLevel = municipalLevel.substring(lastPrefectureIndex + 1); 
-            }
-            // municipalLevel はこれで '横浜市港北区' や '日立市' のような形式になる
+             // 2. 都道府県名が除去された残りの文字列から、最初の行政区画名までを抽出する
+             const match = remainingAddr.match(/.*?(市|区|郡|町|村)/);
 
-            // 3. 区まで含む行政区画名、または市町村名をそのまま返す
-            return municipalLevel;
+             // 3. マッチすればそれを返し、しなければ残りの文字列（または元の文字列）を返す
+             return match ? match[0] : remainingAddr || addr;
         };
 
 
@@ -689,7 +684,215 @@
         const fetchEarthquakeData = async () => {
             if (USE_DUMMY_DATA) {
                 console.warn("★★★ 訓練モード有効 ★★★ ダミーデータを使用しています。テスト後は USE_DUMMY_DATA を false に戻してください。");
+                // 新しいダミーデータを配列の先頭に追加
                 const dummyData = [
+                    // --- 訓練用の東日本大震災データ (code: 551) ---
+                    {
+                        "code": 551,
+                        "issue": {
+                            "source": "気象庁",
+                            "time": "2011/03/11 14:48:00",
+                            "type": "DetailScale",
+                            "correct": "None",
+                            "event_id": "20110311144600" // 津波情報と紐付けるID
+                        },
+                        "earthquake": {
+                            "time": "2011-03-11T14:46:00+09:00",
+                            "hypocenter": {
+                                "name": "三陸沖",
+                                "latitude": 38.1,
+                                "longitude": 142.9,
+                                "depth": 24,
+                                "magnitude": 9.0
+                            },
+                            "maxScale": 70, // 震度7
+                            "domesticTsunami": "MajorWarning" // 大津波警報
+                        },
+                        "points": [
+                            { "pref": "宮城県", "addr": "宮城県栗原市", "scale": 70, "isArea": true },
+                            { "pref": "宮城県", "addr": "宮城県仙台市宮城野区", "scale": 60, "isArea": true },
+                            { "pref": "福島県", "addr": "福島県いわき市", "scale": 60, "isArea": true },
+                            { "pref": "茨城県", "addr": "茨城県日立市", "scale": 60, "isArea": true },
+                            { "pref": "栃木県", "addr": "栃木県大田原市", "scale": 60, "isArea": true },
+                            { "pref": "岩手県", "addr": "岩手県盛岡市", "scale": 55, "isArea": true },
+                            { "pref": "群馬県", "addr": "群馬県前橋市", "scale": 55, "isArea": true },
+                            { "pref": "埼玉県", "addr": "埼玉県さいたま市", "scale": 55, "isArea": true },
+                            { "pref": "千葉県", "addr": "千葉県成田市", "scale": 55, "isArea": true },
+                            { "pref": "東京都", "addr": "東京都千代田区", "scale": 50, "isArea": true },
+                            { "pref": "神奈川県", "addr": "神奈川県横浜市", "scale": 50, "isArea": true },
+                            { "pref": "山梨県", "addr": "山梨県甲府市", "scale": 50, "isArea": true },
+                            { "pref": "静岡県", "addr": "静岡県伊豆の国市", "scale": 50, "isArea": true },
+                            { "pref": "青森県", "addr": "青森県八戸市", "scale": 40, "isArea": true },
+                            { "pref": "北海道", "addr": "北海道函館市", "scale": 40, "isArea": true }
+                        ]
+                    },
+                    // --- 訓練用の東日本大震災津波情報 (code: 552) ---
+                    {
+                        "code": 552,
+                        "issue": {
+                            "source": "気象庁",
+                            "time": "2011/03/11 14:49:00",
+                            "type": "ScaleAndDestination",
+                            "correct": "None",
+                            "event_id": "20110311144600" // 地震情報と紐付けるID
+                        },
+                        "tsunami": {
+                            "forecasts": [
+                                { "grade": "MajorWarning", "area": { "name": "岩手県" } },
+                                { "grade": "MajorWarning", "area": { "name": "宮城県" } },
+                                { "grade": "MajorWarning", "area": { "name": "福島県" } },
+                                { "grade": "Warning", "area": { "name": "青森県太平洋沿岸" } },
+                                { "grade": "Warning", "area": { "name": "茨城県" } },
+                                { "grade": "Warning", "area": { "name": "千葉県九十九里・外房" } },
+                                { "grade": "Warning", "area": { "name": "伊豆諸島" } },
+                                { "grade": "Warning", "area": { "name": "小笠原諸島" } },
+                                { "grade": "Warning", "area": { "name": "相模湾・三浦半島" } },
+                                { "grade": "Warning", "area": { "name": "静岡県" } },
+                                { "grade": "Warning", "area": { "name": "愛知県外海" } },
+                                { "grade": "Warning", "area": { "name": "三重県南部" } },
+                                { "grade": "Warning", "area": { "name": "和歌山県" } },
+                                { "grade": "Warning", "area": { "name": "徳島県" } },
+                                { "grade": "Warning", "area": { "name": "高知県" } },
+                                { "grade": "Warning", "area": { "name": "宮崎県" } },
+                                { "grade": "Warning", "area": { "name": "鹿児島県東部" } },
+                                { "grade": "Warning", "area": { "name": "北海道太平洋沿岸" } },
+                                { "grade": "Advisory", "area": { "name": "青森県日本海沿岸" } },
+                                { "grade": "Advisory", "area": { "name": "陸奥湾" } },
+                                { "grade": "Advisory", "area": { "name": "東京湾内" } },
+                                { "grade": "Advisory", "area": { "name": "大阪府" } },
+                                { "grade": "Advisory", "area": { "name": "兵庫県瀬戸内海沿岸" } }
+                            ]
+                        }
+                    },
+                    // --- 訓練用の南海トラフ地震データ (code: 551) ---
+                    {
+                        "code": 551,
+                        "issue": {
+                            "source": "気象庁",
+                            "time": "2025/01/02 09:02:00",
+                            "type": "DetailScale",
+                            "correct": "None",
+                            "event_id": "20250102090000" // 津波情報と紐付けるID
+                        },
+                        "earthquake": {
+                            "time": "2025-01-02T09:00:00+09:00",
+                            "hypocenter": {
+                                "name": "南海トラフ",
+                                "latitude": 33.0,
+                                "longitude": 135.0,
+                                "depth": 30,
+                                "magnitude": 9.1
+                            },
+                            "maxScale": 70, // 震度7
+                            "domesticTsunami": "MajorWarning" // 大津波警報
+                        },
+                        "points": [
+                            { "pref": "高知県", "addr": "高知県高知市", "scale": 70, "isArea": true },
+                            { "pref": "徳島県", "addr": "徳島県徳島市", "scale": 70, "isArea": true },
+                            { "pref": "和歌山県", "addr": "和歌山県和歌山市", "scale": 70, "isArea": true },
+                            { "pref": "静岡県", "addr": "静岡県静岡市", "scale": 60, "isArea": true },
+                            { "pref": "愛知県", "addr": "愛知県名古屋市", "scale": 60, "isArea": true },
+                            { "pref": "三重県", "addr": "三重県津市", "scale": 60, "isArea": true },
+                            { "pref": "大阪府", "addr": "大阪府大阪市", "scale": 60, "isArea": true },
+                            { "pref": "兵庫県", "addr": "兵庫県神戸市", "scale": 60, "isArea": true },
+                            { "pref": "香川県", "addr": "香川県高松市", "scale": 60, "isArea": true },
+                            { "pref": "愛媛県", "addr": "愛媛県松山市", "scale": 60, "isArea": true },
+                            { "pref": "大分県", "addr": "大分県大分市", "scale": 60, "isArea": true },
+                            { "pref": "宮崎県", "addr": "宮崎県宮崎市", "scale": 60, "isArea": true },
+                            { "pref": "奈良県", "addr": "奈良県奈良市", "scale": 55, "isArea": true },
+                            { "pref": "京都府", "addr": "京都府京都市", "scale": 55, "isArea": true },
+                            { "pref": "岡山県", "addr": "岡山県岡山市", "scale": 55, "isArea": true },
+                            { "pref": "広島県", "addr": "広島県広島市", "scale": 55, "isArea": true },
+                            { "pref": "山口県", "addr": "山口県山口市", "scale": 55, "isArea": true },
+                            { "pref": "福岡県", "addr": "福岡県福岡市", "scale": 55, "isArea": true },
+                            { "pref": "佐賀県", "addr": "佐賀県佐賀市", "scale": 55, "isArea": true },
+                            { "pref": "熊本県", "addr": "熊本県熊本市", "scale": 55, "isArea": true },
+                            { "pref": "鹿児島県", "addr": "鹿児島県鹿児島市", "scale": 55, "isArea": true },
+                            { "pref": "東京都", "addr": "東京都千代田区", "scale": 50, "isArea": true },
+                            { "pref": "神奈川県", "addr": "神奈川県横浜市", "scale": 50, "isArea": true },
+                            { "pref": "滋賀県", "addr": "滋賀県大津市", "scale": 50, "isArea": true },
+                            { "pref": "鳥取県", "addr": "鳥取県鳥取市", "scale": 50, "isArea": true },
+                            { "pref": "島根県", "addr": "島根県松江市", "scale": 50, "isArea": true },
+                            { "pref": "長崎県", "addr": "長崎県長崎市", "scale": 50, "isArea": true },
+                            { "pref": "沖縄県", "addr": "沖縄県那覇市", "scale": 40, "isArea": true }
+                        ]
+                    },
+                    // --- 訓練用の南海トラフ津波情報 (code: 552) ---
+                    {
+                        "code": 552,
+                        "issue": {
+                            "source": "気象庁",
+                            "time": "2025/01/02 09:05:00",
+                            "type": "ScaleAndDestination",
+                            "correct": "None",
+                            "event_id": "20250102090000" // 地震情報と紐付けるID
+                        },
+                        "tsunami": {
+                            "forecasts": [
+                                { "grade": "MajorWarning", "area": { "name": "静岡県" } },
+                                { "grade": "MajorWarning", "area": { "name": "愛知県外海" } },
+                                { "grade": "MajorWarning", "area": { "name": "三重県南部" } },
+                                { "grade": "MajorWarning", "area": { "name": "和歌山県" } },
+                                { "grade": "MajorWarning", "area": { "name": "徳島県" } },
+                                { "grade": "MajorWarning", "area": { "name": "高知県" } },
+                                { "grade": "MajorWarning", "area": { "name": "宮崎県" } },
+                                { "grade": "Warning", "area": { "name": "千葉県九十九里・外房" } },
+                                { "grade": "Warning", "area": { "name": "神奈川県" } },
+                                { "grade": "Warning", "area": { "name": "大阪府" } },
+                                { "grade": "Warning", "area": { "name": "兵庫県瀬戸内海沿岸" } },
+                                { "grade": "Warning", "area": { "name": "岡山県" } },
+                                { "grade": "Warning", "area": { "name": "広島県" } },
+                                { "grade": "Warning", "area": { "name": "山口県瀬戸内海沿岸" } },
+                                { "grade": "Warning", "area": { "name": "大分県" } },
+                                { "grade": "Warning", "area": { "name": "鹿児島県東部" } },
+                                { "grade": "Advisory", "area": { "name": "東京都伊豆諸島" } },
+                                { "grade": "Advisory", "area": { "name": "東京都小笠原諸島" } },
+                                { "grade": "Advisory", "area": { "name": "愛知県内海" } },
+                                { "grade": "Advisory", "area": { "name": "瀬戸内海沿岸" } },
+                                { "grade": "Advisory", "area": { "name": "九州西岸" } },
+                                { "grade": "Advisory", "area": { "name": "沖縄本島地方" } }
+                            ]
+                        }
+                    },
+                    // --- 訓練用の大阪府北部（上町断層帯）地震データ (code: 551) ---
+                    {
+                        "code": 551,
+                        "issue": {
+                            "source": "気象庁",
+                            "time": "2025/01/03 14:32:00",
+                            "type": "DetailScale",
+                            "correct": "None",
+                            "event_id": "20250103143000"
+                        },
+                        "earthquake": {
+                            "time": "2025-01-03T14:30:00+09:00",
+                            "hypocenter": {
+                                "name": "大阪府北部（上町断層帯）",
+                                "latitude": 34.7,
+                                "longitude": 135.5,
+                                "depth": 10,
+                                "magnitude": 7.5
+                            },
+                            "maxScale": 70,
+                            "domesticTsunami": "None"
+                        },
+                        "points": [
+                            { "pref": "大阪府", "addr": "大阪府大阪市中央区", "scale": 70, "isArea": true },
+                            { "pref": "大阪府", "addr": "大阪府大阪市北区", "scale": 70, "isArea": true },
+                            { "pref": "大阪府", "addr": "大阪府堺市堺区", "scale": 60, "isArea": true },
+                            { "pref": "大阪府", "addr": "大阪府豊中市", "scale": 60, "isArea": true },
+                            { "pref": "兵庫県", "addr": "兵庫県尼崎市", "scale": 60, "isArea": true },
+                            { "pref": "京都府", "addr": "京都府京都市伏見区", "scale": 55, "isArea": true },
+                            { "pref": "奈良県", "addr": "奈良県奈良市", "scale": 55, "isArea": true },
+                            { "pref": "和歌山県", "addr": "和歌山県和歌山市", "scale": 55, "isArea": true },
+                            { "pref": "滋賀県", "addr": "滋賀県大津市", "scale": 55, "isArea": true },
+                            { "pref": "兵庫県", "addr": "兵庫県神戸市東灘区", "scale": 50, "isArea": true },
+                            { "pref": "三重県", "addr": "三重県津市", "scale": 50, "isArea": true },
+                            { "pref": "岐阜県", "addr": "岐阜県岐阜市", "scale": 45, "isArea": true },
+                            { "pref": "福井県", "addr": "福井県福井市", "scale": 45, "isArea": true },
+                            { "pref": "徳島県", "addr": "徳島県徳島市", "scale": 40, "isArea": true }
+                        ]
+                    },
                     // --- 訓練用の津波情報 (code: 552) ---
                     {
                         "code": 552,
