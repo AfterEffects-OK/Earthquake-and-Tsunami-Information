@@ -255,6 +255,42 @@
             padding-bottom: 0.2rem;
         }
 
+        /* 地震一覧の「津波なし」バッジのスタイルを上書き */
+        #earthquake-list .tsunami-none {
+            min-width: auto; /* 固定幅を解除 */
+            border-radius: 0.375rem; /* 角丸を他のバッジと合わせる */
+        }
+
+        /* --- ON AIR バッジのスタイル --- */
+        .on-air-badge {
+            position: absolute;
+            top: 0;
+            left: 0;
+            background-color: #dc2626; /* red-600 */
+            color: white;
+            font-size: 0.75rem; /* text-xs */
+            font-weight: 700;
+            padding: 0.125rem 0.5rem; /* py-0.5 px-2 */
+            border-bottom-right-radius: 0.5rem; /* rounded-br-lg */
+            border-top-left-radius: 0.5rem; /* rounded-tl-lg */
+            z-index: 10;
+            animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+        @keyframes pulse {
+            50% { opacity: 0.7; }
+        }
+
+        /* ループ再生中にリストがグレーアウトしても、ON AIRバッジは影響を受けないようにする */
+        #earthquake-list.opacity-50 .on-air-badge {
+            opacity: 1;
+        }
+
+        /* ループ再生中にグレーアウトされるカードのスタイル */
+        .earthquake-card.grayed-out-card {
+            background-color: rgba(31, 41, 55, 0.5); /* bg-gray-800 の半透明版 */
+            border-color: rgba(75, 85, 99, 0.5); /* border-gray-700 の半透明版 */
+            pointer-events: none; /* クリックイベントを無効化 */
+        }
 
     </style>
 </head>
@@ -951,24 +987,29 @@
             const eventId = String(earthquake.issue?.event_id || earthquake.issue?.eventid);
             const tsunamiData = tsunamiDetailsMap.get(eventId);
             const detailedTsunamiGrade = tsunamiData ? tsunamiData.highestGrade : earthquake.earthquake.domesticTsunami;
-
-            const getTsunamiInfo = (grade) => {
-                switch (grade) {
-                    case 'MajorWarning':
-                        return { label: '大津波警報', class: 'tsunami-major-warning' };
-                    case 'Warning':
-                        return { label: '津波警報', class: 'tsunami-warning-detailed' };
-                    case 'Advisory':
-                        return { label: '津波注意報', class: 'tsunami-advisory' };
-                    case 'None':
-                        return { label: '津波なし', class: 'tsunami-none' };
-                    case 'Checking':
-                        return { label: '調査中', class: 'tsunami-checking' };
-                    default:
-                        return { label: '', class: 'hidden' }; // それ以外は非表示
+            
+            // 発表されている全ての津波情報をバッジとして保持する
+            const tsunamiBadges = [];
+            if (tsunamiData) {
+                if (tsunamiData.areas.MajorWarning?.size > 0) {
+                    tsunamiBadges.push({ label: '大津波警報', class: 'tsunami-major-warning' });
                 }
-            };
-            const tsunamiInfo = getTsunamiInfo(detailedTsunamiGrade);
+                if (tsunamiData.areas.Warning?.size > 0) {
+                    tsunamiBadges.push({ label: '津波警報', class: 'tsunami-warning-detailed' });
+                }
+                if (tsunamiData.areas.Advisory?.size > 0) {
+                    tsunamiBadges.push({ label: '津波注意報', class: 'tsunami-advisory' });
+                }
+            }
+
+            // 警報・注意報がない場合のフォールバック
+            if (tsunamiBadges.length === 0) {
+                if (detailedTsunamiGrade === 'None') {
+                    tsunamiBadges.push({ label: '津波なし', class: 'tsunami-none' });
+                } else if (detailedTsunamiGrade === 'Checking') {
+                    tsunamiBadges.push({ label: '調査中', class: 'tsunami-checking' });
+                }
+            }
             
             // 津波予報のエリア情報を取得
             const tsunamiForecastAreas = tsunamiData ? {
@@ -1006,8 +1047,7 @@
                 depth: earthquake.earthquake.hypocenter.depth, // 震源の深さを追加
                 magnitude: magnitudeDisplay,
                 tsunami: earthquake.earthquake.domesticTsunami, // 津波の有無を追加
-                tsunamiLabel: tsunamiInfo.label,
-                tsunamiClass: tsunamiInfo.class,
+                tsunamiBadges: tsunamiBadges, // 複数の津波バッジ情報を保持
                 tsunamiForecastAreas: tsunamiForecastAreas, // 津波予報エリア情報を追加
                 maxShindoLabel: scaleToShindo(earthquake.earthquake.maxScale).label,
                 maxShindoClass: scaleToShindo(earthquake.earthquake.maxScale).class,
@@ -1091,17 +1131,22 @@
         const renderEarthquakeListItem = (eq) => {
             // ダークモード対応: p-3 -> py-3 px-2 に変更 (左右のパディングを半減)
             return `
-                <div id="card-${eq.id}" 
-                     class="earthquake-card py-3 px-2 rounded-lg shadow-sm border-l-4 border-gray-700 bg-gray-700 hover:bg-gray-600 transition duration-150 cursor-pointer"
+                <div id="card-${eq.id}"
+                     class="earthquake-card relative py-3 px-2 rounded-lg shadow-sm border-l-4 border-gray-700 bg-gray-700 hover:bg-gray-600 transition duration-150 cursor-pointer"
                      data-event-id="${eq.id}">
+                    <span id="on-air-${eq.id}" class="on-air-badge hidden">ON AIR</span>
                     <div class="flex justify-between items-start">
-                        <div class="flex-grow truncate pr-2">
+                        <div class="flex-grow truncate pr-2 pl-12">
                             <p class="text-sm font-medium text-gray-100">${eq.epicenter}</p>
                             <p class="text-xs text-gray-400">${eq.time}</p>
                         </div>
                         <div class="flex flex-col items-end space-y-1 flex-shrink-0">
                             <span class="shindo-badge text-xs ${eq.maxShindoClass}">${eq.maxShindoLabel}</span>
-                            <span class="tsunami-badge list-tsunami-badge ${eq.tsunamiClass}">${eq.tsunamiLabel}</span>
+                            <div class="flex space-x-1 mt-1">
+                                ${eq.tsunamiBadges.map(badge => `
+                                    <span class="tsunami-badge list-tsunami-badge ${badge.class}">${badge.label}</span>
+                                `).join('')}
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -1133,7 +1178,7 @@
             }
 
             // 津波の有無に応じてタイトルを変更
-            const hasTsunamiWarning = ['大津波警報', '津波警報', '津波注意報'].includes(eq.tsunamiLabel);
+            const hasTsunamiWarning = eq.tsunamiBadges.some(b => ['大津波警報', '津波警報', '津波注意報'].includes(b.label));
             if (hasTsunamiWarning) {
                 detailTitle.textContent = '地震・津波詳細';
             } else {
@@ -1179,7 +1224,9 @@
                     <p><strong>マグニチュード:</strong> M${eq.magnitude}</p>
                     <p><strong>津波の有無:</strong> 
                         ${(() => {
-                            switch (eq.tsunamiLabel) {
+                            // 最高レベルの警報を基準にメッセージを決定
+                            const highestTsunami = eq.tsunamiBadges[0] || {};
+                            switch (highestTsunami.label) {
                                 case '大津波警報': return '<span class="font-bold text-purple-400">大津波警報を発表中です</span>';
                                 case '津波警報': return '<span class="font-bold text-red-500">津波警報を発表中です</span>';
                                 case '津波注意報': return '<span class="font-bold text-yellow-400">津波注意報を発表中です</span>';
@@ -1966,10 +2013,25 @@
             toggleSwitch.disabled = true;
             refreshButton.disabled = true;
             toggleLabel.classList.add('opacity-50', 'cursor-not-allowed');
-            earthquakeList.classList.add('opacity-50', 'pointer-events-none');
+            // earthquakeList.classList.add('opacity-50', 'pointer-events-none'); // この行を削除
             refreshButton.classList.add('opacity-50', 'cursor-not-allowed');
             dummyDataButton.disabled = true;
             dummyDataButton.classList.add('opacity-50', 'cursor-not-allowed');
+
+            // 選択されていないカードをグレーアウトし、クリックを無効化
+            document.querySelectorAll('.earthquake-card').forEach(card => {
+                if (card.id !== selectedCardId) {
+                    card.classList.add('grayed-out-card');
+                }
+            });
+
+            // 地震一覧全体のクリックを無効化
+            earthquakeList.classList.add('pointer-events-none');
+
+            // ON AIRバッジを表示 (グレーアウト処理の後に実行)
+            if (selectedCardId) {
+                document.getElementById(`on-air-${selectedCardId.substring(5)}`)?.classList.remove('hidden');
+            }
 
             playIcon.classList.add('hidden');
             pauseIcon.classList.remove('hidden');
@@ -2048,10 +2110,21 @@
             toggleSwitch.disabled = false;
             refreshButton.disabled = false;
             toggleLabel.classList.remove('opacity-50', 'cursor-not-allowed');
-            earthquakeList.classList.remove('opacity-50', 'pointer-events-none');
+            earthquakeList.classList.remove('pointer-events-none'); // 地震一覧のクリックを再度有効化
             refreshButton.classList.remove('opacity-50', 'cursor-not-allowed');
             dummyDataButton.disabled = false;
             dummyDataButton.classList.remove('opacity-50', 'cursor-not-allowed');
+
+            // 全てのカードのグレーアウトとクリック無効化を解除
+            document.querySelectorAll('.earthquake-card').forEach(card => {
+                card.classList.remove('grayed-out-card');
+            });
+
+            // 全てのON AIRバッジを非表示にする (グレーアウト解除の前に実行)
+            document.querySelectorAll('.on-air-badge').forEach(badge => {
+                badge.classList.add('hidden');
+            });
+
             // アニメーションクラスが残っている場合があるので削除
             document.getElementById('animation-wrapper').className = 'flex items-center w-full h-full';
 
