@@ -224,6 +224,12 @@
             background-color: #3b82f6; /* blue-500 */
             color: white;
         }
+        .tsunami-observed {
+            /* 津波観測中用の新しいスタイル */
+            background-color: #9333ea; /* purple-600 */
+            color: white;
+        }
+
 
         /* 固定フッターの津波警報バッジ用のスタイル */
         #fixed-shindo-bar .tsunami-telop-badge {
@@ -737,7 +743,7 @@
                         "issue": {
                             "source": "気象庁",
                             "time": "2011/03/11 14:49:00",
-                            "type": "DetailScale",
+                            "type": "ScaleAndDestination",
                             "correct": "None",
                             "event_id": "20110311144600"
                         },
@@ -2591,6 +2597,31 @@
                             ]
                         }
                     },
+                    // --- 【新規追加】訓練用の東日本大震災津波観測情報 (code: 556) ---
+                    {
+                        "code": 556,
+                        "cancelled": false,
+                        "issue": {
+                            "source": "気象庁",
+                            "time": "2011/03/11 15:30:00",
+                            "type": "Tsunami",
+                            "event_id": "20110311144600"
+                        },
+                        "areas": [
+                            {
+                                "grade": "MajorWarning",
+                                "immediate": true,
+                                "name": "宮城県",
+                                "stations": [
+                                    { "name": "石巻市鮎川", "time": "2011-03-11T15:26:00+09:00", "height": 8.6, "condition": "観測中" },
+                                    { "name": "相馬", "time": "2011-03-11T15:20:00+09:00", "height": 9.3, "condition": "観測中" },
+                                    { "name": "大船渡", "time": "2011-03-11T15:18:00+09:00", "height": 8.0, "condition": "観測中" },
+                                    { "name": "釜石", "time": "2011-03-11T15:21:00+09:00", "height": 4.2, "condition": "観測中" }
+                                ]
+                            }
+                        ]
+                    },
+
                     // --- 訓練用の十勝沖地震データ (code: 551) ---
                     {
                         "code": 551,
@@ -2885,16 +2916,34 @@
                 const tsunamiInfos = dummyData.filter(d => d.code === 552);
                 tsunamiInfos.forEach(info => {
                     const eventId = String(info.issue.event_id || info.issue.eventid);
-                    if (!info.tsunami || !info.tsunami.forecasts) return;
+                    if (!info.tsunami || !info.tsunami.forecasts) return; // 修正: returnを追加
                     const forecastsByGrade = { 'MajorWarning': new Set(), 'Warning': new Set(), 'Advisory': new Set() };
                     info.tsunami.forecasts.forEach(forecast => { if (forecastsByGrade[forecast.grade] && forecast.area.name) { forecastsByGrade[forecast.grade].add(forecast.area.name); } });
                     const grades = Object.keys(forecastsByGrade).filter(grade => forecastsByGrade[grade].size > 0);
                     let highestGrade = 'None';
                     if (grades.includes('MajorWarning')) highestGrade = 'MajorWarning'; else if (grades.includes('Warning')) highestGrade = 'Warning'; else if (grades.includes('Advisory')) highestGrade = 'Advisory';
-                    tsunamiDetailsMap.set(eventId, { highestGrade, areas: forecastsByGrade });
+                    tsunamiDetailsMap.set(eventId, { highestGrade, areas: forecastsByGrade }); // 修正: 最後の閉じ括弧を修正
                 });
-                const filteredEarthquakes = dummyData.filter(eq => eq.earthquake && eq.earthquake.maxScale >= CONFIG.MIN_LIST_SCALE);
-                PROCESSED_EARTHQUAKES = await Promise.all(filteredEarthquakes.map(eq => processEarthquake(eq, tsunamiDetailsMap)));
+
+                // ★★★ 修正: 訓練モードでも津波観測情報を処理する ★★★
+                const tsunamiObservationMap = new Map();
+                const observationInfos = dummyData.filter(d => d.code === 556 && !d.cancelled);
+                observationInfos.forEach(info => {
+                    const eventId = String(info.issue.event_id || info.issue.eventid);
+                    if (!info.areas) return;
+                    let maxObservedHeight = 0;
+                    const stations = [];
+                    info.areas.forEach(area => {
+                        area.stations?.forEach(station => {
+                            if (station.height > maxObservedHeight) maxObservedHeight = station.height;
+                            stations.push(station);
+                        });
+                    });
+                    tsunamiObservationMap.set(eventId, { maxObservedHeight, stations });
+                });
+
+                const filteredEarthquakes = dummyData.filter(eq => eq.code === 551 && eq.earthquake && eq.earthquake.maxScale >= CONFIG.MIN_LIST_SCALE);
+                PROCESSED_EARTHQUAKES = await Promise.all(filteredEarthquakes.map(eq => processEarthquake(eq, tsunamiDetailsMap, tsunamiObservationMap)));
                 return PROCESSED_EARTHQUAKES;
             }
 
@@ -2909,10 +2958,12 @@
                 // 震度情報(551)と津波情報(552)を別々にリクエスト
                 const url551 = `${CONFIG.API_URL}&codes=551`;
                 const url552 = `${CONFIG.API_URL}&codes=552`;
+                const url556 = `${CONFIG.API_URL}&codes=556`; // 津波観測情報
 
-                const [response551, response552] = await Promise.all([
+                const [response551, response552, response556] = await Promise.all([
                     fetch(url551),
-                    fetch(url552)
+                    fetch(url552),
+                    fetch(url556)
                 ]);
 
                 if (!response551.ok) {
@@ -2921,10 +2972,14 @@
                 if (!response552.ok) {
                     throw new Error(`HTTPエラー (津波情報): ${response552.status}`);
                 }
+                if (!response556.ok) {
+                    throw new Error(`HTTPエラー (津波観測情報): ${response556.status}`);
+                }
                 
                 const data551 = await response551.json();
                 const data552 = await response552.json();
-                const data = [...data551, ...data552];
+                const data556 = await response556.json();
+                const data = [...data551, ...data552, ...data556];
 
                 // --- 1. 津波情報(552)を先に処理し、event_idごとに最高の警報レベルをマップに保存 ---
                 const tsunamiDetailsMap = new Map();
@@ -2953,6 +3008,29 @@
                     else if (grades.includes('Advisory')) highestGrade = 'Advisory';
 
                     tsunamiDetailsMap.set(eventId, { highestGrade, areas: forecastsByGrade });
+                });
+
+                // --- 2. 津波観測情報(556)を処理し、event_idごとに観測点をマップに保存 ---
+                const tsunamiObservationMap = new Map();
+                const observationInfos = data.filter(d => d.code === 556 && !d.cancelled);
+
+                observationInfos.forEach(info => {
+                    const eventId = String(info.issue.event_id || info.issue.eventid);
+                    if (!info.areas) return;
+
+                    let maxObservedHeight = 0;
+                    const stations = [];
+
+                    info.areas.forEach(area => {
+                        area.stations?.forEach(station => {
+                            if (station.height > maxObservedHeight) {
+                                maxObservedHeight = station.height;
+                            }
+                            stations.push(station);
+                        });
+                    });
+
+                    tsunamiObservationMap.set(eventId, { maxObservedHeight, stations });
                 });
 
                 // 最大震度3以上の地震のみをフィルタリング (CONFIG.MIN_LIST_SCALEを使用)
@@ -2987,6 +3065,11 @@
                         if (eq.earthquake.maxScale > existingEq.earthquake.maxScale) {
                             existingEq.earthquake.maxScale = eq.earthquake.maxScale;
                         }
+                        // 津波情報が更新された場合（例: "Checking" -> "None" や "Warning"）
+                        // domesticTsunamiはより危険度が高い情報で上書きする
+                        if (eq.earthquake.domesticTsunami !== existingEq.earthquake.domesticTsunami) {
+                            existingEq.earthquake.domesticTsunami = eq.earthquake.domesticTsunami;
+                        }
                     } else {
                         // 新しい地震イベントとして追加
                         uniqueEarthquakesMap.set(eventKey, eq);
@@ -2997,7 +3080,7 @@
 
                 // 処理済みのデータセットをグローバル変数に格納
                 // ここでは描画モードに関わらず、全ての情報を保持
-                PROCESSED_EARTHQUAKES = await Promise.all(uniqueEarthquakes.map(eq => processEarthquake(eq, tsunamiDetailsMap)));
+                PROCESSED_EARTHQUAKES = await Promise.all(uniqueEarthquakes.map(eq => processEarthquake(eq, tsunamiDetailsMap, tsunamiObservationMap)));
 
                 // 新しい地震データをスプレッドシートに記録
                 if (PROCESSED_EARTHQUAKES.length > 0) {
@@ -3089,7 +3172,7 @@
          * @param {Object} earthquake - APIから取得した単一の地震情報オブジェクト
          * @returns {Object} 処理後の整形済み地震情報
          */
-        const processEarthquake = async (earthquake, tsunamiDetailsMap) => {
+        const processEarthquake = async (earthquake, tsunamiDetailsMap, tsunamiObservationMap) => {
             // --- 安定したID生成ロジック ---
             const eqData = earthquake.earthquake;
             const idSource = `${eqData.time}_${eqData.hypocenter.name}`; // ★基準を地震発生時刻に変更
@@ -3099,6 +3182,7 @@
             // API提供のeventidは津波情報の紐付けにのみ利用
             const eventId = String(earthquake.issue?.event_id || earthquake.issue?.eventid);
             const tsunamiData = tsunamiDetailsMap.get(eventId);
+            const tsunamiObservationData = tsunamiObservationMap.get(eventId);
             const detailedTsunamiGrade = tsunamiData ? tsunamiData.highestGrade : earthquake.earthquake.domesticTsunami;
             
             // 発表されている全ての津波情報をバッジとして保持する
@@ -3113,6 +3197,11 @@
                 if (tsunamiData.areas.Advisory?.size > 0) {
                     tsunamiBadges.push({ label: '津波注意報', class: 'tsunami-advisory' });
                 }
+            }
+
+            // 津波観測情報があればバッジを追加
+            if (tsunamiObservationData && tsunamiObservationData.maxObservedHeight > 0) {
+                tsunamiBadges.push({ label: '津波観測中', class: 'tsunami-observed' });
             }
 
             // 警報・注意報がない場合のフォールバック
@@ -3179,6 +3268,7 @@
                 tsunami: earthquake.earthquake.domesticTsunami, // 津波の有無を追加
                 tsunamiLabel: tsunamiLabelForGas, // ★★★ GAS送信用に追加 ★★★
                 tsunamiBadges: tsunamiBadges, // 複数の津波バッジ情報を保持
+                tsunamiObservation: tsunamiObservationData, // 津波観測情報を追加
                 tsunamiForecastAreas: tsunamiForecastAreas, // 津波予報エリア情報を追加
                 maxShindoLabel: scaleToShindo(earthquake.earthquake.maxScale).label,
                 maxShindoClass: scaleToShindo(earthquake.earthquake.maxScale).class,
@@ -3309,7 +3399,7 @@
             }
 
             // 津波の有無に応じてタイトルを変更
-            const hasTsunamiWarning = eq.tsunamiBadges.some(b => ['大津波警報', '津波警報', '津波注意報'].includes(b.label));
+            const hasTsunamiWarning = eq.tsunamiBadges.some(b => ['大津波警報', '津波警報', '津波注意報', '津波観測中'].includes(b.label));
             if (hasTsunamiWarning) {
                 detailTitle.textContent = '地震・津波詳細';
             } else {
@@ -3360,6 +3450,7 @@
                                 case '大津波警報': return '<span class="font-bold text-purple-400">大津波警報を発表中です</span>';
                                 case '津波警報': return '<span class="font-bold text-red-500">津波警報を発表中です</span>';
                                 case '津波注意報': return '<span class="font-bold text-yellow-400">津波注意報を発表中です</span>';
+                                case '津波観測中': return `<span class="font-bold text-purple-400">津波を観測中です (最大 ${eq.tsunamiObservation?.maxObservedHeight || '?'}m)</span>`;
                                 case '津波なし': return 'この地震による津波の心配はありません';
                                 case '調査中': return '現在 気象庁が調査中です';
                                 default: return '不明';
@@ -3395,6 +3486,31 @@
                 ${(() => {
                     if (!eq.tsunamiForecastAreas || (eq.tsunamiForecastAreas.MajorWarning.length === 0 && eq.tsunamiForecastAreas.Warning.length === 0 && eq.tsunamiForecastAreas.Advisory.length === 0)) return '';
                     return '<hr class="my-6 border-gray-600">';
+                })()}
+
+                ${(() => {
+                    if (!eq.tsunamiObservation || !eq.tsunamiObservation.stations || eq.tsunamiObservation.stations.length === 0) {
+                        return '';
+                    }
+                    const sortedStations = [...eq.tsunamiObservation.stations].sort((a, b) => b.height - a.height);
+                    const stationList = sortedStations.map(station => {
+                        const heightText = station.height >= 10 ? `${station.height.toFixed(1)}m以上` : `${station.height.toFixed(1)}m`;
+                        const timeText = formatDateTime(station.time).split(' ')[1]; // HH:mm
+                        return `
+                            <div class="flex justify-between items-baseline py-1 border-b border-gray-700">
+                                <span class="text-lg font-semibold text-gray-200">${station.name}</span>
+                                <span class="text-lg font-bold text-red-400">${heightText} <span class="text-xs text-gray-400 font-normal">(${timeText})</span></span>
+                            </div>
+                        `;
+                    }).join('');
+
+                    return `
+                        <h5 class="flex items-center text-base font-bold text-gray-200 mb-2 mt-6">
+                            <span class="tsunami-badge tsunami-observed mr-2">津波観測情報</span>
+                        </h5>
+                        <div class="space-y-1">${stationList}</div>
+                        <hr class="my-6 border-gray-600">
+                    `;
                 })()}
 
                 <!-- ダークモード対応: text-gray-700 -> text-gray-200 -->
@@ -3565,10 +3681,14 @@
 
             if (!eq || !eq.points) {
                 // 初期状態 / データなし
+                // 初期状態 / データなし / 自動再生待機中ではない
                 FIXED_BAR_VIEWS = [];
                 shindoNav.style.display = 'none';
                 displayInitialFixedBarState();
-                pauseAutoplay(); // 自動送りを停止
+                // 自動再生待機中でなければ停止する
+                if (!isWaitingForAutoplay) {
+                    pauseAutoplay();
+                }
                 return;
             }
             
@@ -3690,6 +3810,24 @@
                 createTsunamiAreaViews(eq.tsunamiForecastAreas.Advisory, '津波注意報', 'tsunami-advisory');
             }
 
+            // 津波観測情報のページを生成
+            if (eq.tsunamiObservation && eq.tsunamiObservation.stations && eq.tsunamiObservation.stations.length > 0) {
+                const sortedStations = [...eq.tsunamiObservation.stations].sort((a, b) => b.height - a.height);
+                let pageStations = [];
+                for (const station of sortedStations) {
+                    const heightText = station.height >= 10 ? `${station.height.toFixed(1)}m以上` : `${station.height.toFixed(1)}m`;
+                    const stationText = `<span class="inline-block">${station.name} ${heightText}</span>`;
+                    const testHtml = [...pageStations, stationText].join('　');
+                    if (!doesTextFitInTwoLines(testHtml, contentLine1) && pageStations.length > 0) {
+                        FIXED_BAR_VIEWS.push({ type: 'shindo', shindo: '津波観測中', line1: pageStations.join('　'), line2: '', shindoClass: 'tsunami-observed' });
+                        pageStations = [stationText];
+                    } else {
+                        pageStations.push(stationText);
+                    }
+                }
+                if (pageStations.length > 0) FIXED_BAR_VIEWS.push({ type: 'shindo', shindo: '津波観測中', line1: pageStations.join('　'), line2: '', shindoClass: 'tsunami-observed' });
+            }
+
 
             // --- 4. 「各地の震度は〜」ページの生成 ---
             const finalTextView = { type: 'summary', shindo: '震度情報', line1: '各地の震度は次のとおりです', line2: '', shindoClass: 'bg-gray-500 text-white' };
@@ -3765,6 +3903,7 @@
             const autoplayControls = document.getElementById('autoplay-controls');
             const transitionControls = document.getElementById('transition-controls');
             const resetButton = document.getElementById('reset-display-button');
+            const pageInfo = document.getElementById('shindo-page-info');
 
             // 変更: テキストとバッジを非表示にする
             line1.textContent = '';
@@ -3774,6 +3913,7 @@
             autoplayControls.style.display = 'none';
             transitionControls.style.display = 'none';
             resetButton.style.display = 'none';
+            pageInfo.textContent = '';
         }
 
         /**
@@ -4303,12 +4443,14 @@
                 DISPLAY_MODE = isChecked ? 'point' : 'municipality';
 
                 // ラベルのスタイルを更新
+                // ラベルのスタイルを更新 (ダークモード対応)
                 if (isChecked) { 
                     // TRUE: 観測点別(labelPoint)をアクティブにする
                     labelPoint.classList.add('font-bold', 'text-blue-400');
                     labelPoint.classList.remove('text-gray-400', 'font-medium');
                     
                     labelMunicipality.classList.remove('font-bold', 'text-blue-400');
+                    labelMunicipality.classList.remove('font-bold', 'text-blue-400', 'transition-colors', 'duration-200');
                     labelMunicipality.classList.add('text-gray-400', 'font-medium');
                 } else { 
                     // FALSE: 市区町村別(labelMunicipality)をアクティブにする
@@ -4317,6 +4459,7 @@
                     
                     labelMunicipality.classList.add('font-bold', 'text-blue-400');
                     labelMunicipality.classList.remove('text-gray-400', 'font-medium');
+                    labelMunicipality.classList.remove('text-gray-400', 'font-medium', 'transition-colors', 'duration-200');
                 }
 
                 // 現在選択されている地震の詳細を再描画
@@ -4447,4 +4590,4 @@
         </div>
     </div>
 </body>
-</html>
+</html
