@@ -669,20 +669,19 @@
                  }
              }
 
-             // パターン1: 「〇〇市〇〇区」
-             // パターン1: 「〇〇市〇〇区」を優先的にマッチ
+             // パターン1: 「〇〇市〇〇区」を優先的にマッチ (例: 仙台市宮城野区)
              const cityAndWardMatch = remainingAddr.match(/^.+?市.+?区/);
              if (cityAndWardMatch) return cityAndWardMatch[0];
              if (cityAndWardMatch) {
                  return cityAndWardMatch[0];
              }
 
-             // パターン2: 「〇〇郡〇〇町/村」の場合、町/村のみを抽出
+             // パターン2: 「〇〇郡〇〇町/村」の場合、町/村のみを抽出　(例: 北海道空知郡南幌町 -> 空知郡南幌町)
              const gunMatch = remainingAddr.match(/^.+?郡(.+?(町|村))/);
              if (gunMatch && gunMatch[1]) return gunMatch[1];
  
-             // パターン3: 「〇〇市」「〇〇町」「〇〇村」
-             const cityTownVillageMatch = remainingAddr.match(/^.+?(市|町|村)/);
+             // パターン3: 「〇〇市」「〇〇区」「〇〇町」「〇〇村」 (例: 栃木市入舟町 -> 栃木市, 仙台宮城野区 -> 仙台宮城野区)
+             const cityTownVillageMatch = remainingAddr.match(/^.+?(市|区|町|村)/);
              if (cityTownVillageMatch) return cityTownVillageMatch[0];
 
              // どのパターンにもマッチしない場合は、元の観測点名を返す
