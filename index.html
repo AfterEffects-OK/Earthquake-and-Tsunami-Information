@@ -3147,7 +3147,11 @@
                         .slice(0, 40);
 
                     // 各観測点データに、関連する地震IDを追加 
-                    const payload = sortedAndLimitedPoints.map(point => ({ ...point, earthquakeId: eq.id }));
+                    const payload = sortedAndLimitedPoints.map(point => ({
+                        ...point,
+                        addr: `${point.pref}_${point.addr}`, // ★都道府県名と観測点名を連結
+                        earthquakeId: eq.id
+                    }));
 
                     // 非同期で送信処理を実行（awaitしないことで、次の地震の処理をブロックしない）
                     fetch(url, {
@@ -3253,7 +3257,9 @@
                 earthquake.points.forEach(point => {
                     // point.scale (e.g., 30) が shindoPoints のキーとして存在するかチェック
                     if (shindoPoints.hasOwnProperty(point.scale)) {
-                        shindoPoints[point.scale].push(point.addr);
+                        // 都道府県名と観測点名をアンダースコアで連結してリストに追加
+                        const formattedPointName = `${point.pref}_${point.addr}`;
+                        shindoPoints[point.scale].push(formattedPointName);
                     }
                 });
             }
@@ -4586,6 +4592,11 @@
             </div>
             <button id="shortcut-modal-close-x" class="absolute top-3 right-3 text-gray-400 hover:text-white">
                 <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+            </button>
+        </div>
+    </div>
+</body>
+</html          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
             </button>
         </div>
     </div>
