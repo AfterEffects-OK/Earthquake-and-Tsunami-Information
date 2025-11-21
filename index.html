@@ -3940,7 +3940,7 @@
             autoplayControls.style.display = 'none';
             transitionControls.style.display = 'none';
             resetButton.style.display = 'none';
-            pageInfo.textContent = '';
+            pageInfo.textContent = '地震 待機中';
         }
 
         /**
@@ -4377,17 +4377,19 @@
                         };
                         updateFixedBarDisplay(endView);
 
-                        // ★再生済みの地震IDを記録
-                        playedEarthquakeIds.push(eq.id);
+                        // ★再生済みの地震IDを記録 (eqがスコープ外なのでselectedCardIdから取得)
+                        const currentEqId = selectedCardId?.substring(5);
+                        if (currentEqId && !playedEarthquakeIds.includes(currentEqId)) {
+                            playedEarthquakeIds.push(currentEqId);
+                        }
 
                         // 終了画面表示後、待機中のメッセージを表示
                         document.getElementById('shindo-page-info').textContent = '地震 待機中';
 
                         // 指定秒数後に表示をクリアする
                         setTimeout(() => {
-                            document.getElementById('content-line-1').textContent = '';
-                            document.getElementById('current-shindo-label').classList.add('hidden');
                             pauseAutoplay(true); // 完全に停止状態に戻す
+                            refreshData(); // APIを更新して表示をリセットする
                         }, duration);
                         return;
                     }
