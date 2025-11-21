@@ -479,6 +479,8 @@
         let autoplayIntervalId = null;
         let isAutoplaying = false;
         let autoplayLoopCounter = 0;
+        // ★再生済みの地震IDを記録する配列
+        let playedEarthquakeIds = [];
         let refreshIntervalId = null; // 自動更新のタイマーIDを保持
         // 新しい地震を検知し、自動再生を待機している状態を示すフラグ
         let isWaitingForAutoplay = false; 
@@ -3267,6 +3269,7 @@
             // 必要な情報を整形して返す。pointsデータはrawPointsとして保存し、描画時に処理する
             return {
                 id: syntheticId,
+                rawTime: earthquake.earthquake.time, // ★自動再生の日付判定用に生の時刻を追加
                 time: formatDateTime(earthquake.earthquake.time), // ★表示も地震発生時刻に変更
                 epicenter: earthquake.earthquake.hypocenter.name || '不明',
                 depth: earthquake.earthquake.hypocenter.depth, // 震源の深さを追加
@@ -3643,14 +3646,31 @@
 
             if (hasChanged && !isAutoplaying) {
                 // 新しい地震がリストの先頭に来るように、displayEarthquakesがソートしていることを前提とする
-                if (earthquakes.length > 0) {
-                    isWaitingForAutoplay = true; // 自動再生待機フラグを立てる
-                    // 詳細パネルと固定バーのビューは更新するが、表示はさせない
-                    const eqData = earthquakes[0];
-                    updateFixedShindoBar(eqData);
-                    updateNavControls({}, null); // isWaitingForAutoplayフラグを元に「地震 受信中」を表示させる
-                    console.log('新しい地震データを検知しました。3秒後に自動再生を開始します。');
-                    setTimeout(startAutoplay, 3000); // 3秒待ってから自動再生を開始
+                if (earthquakes.length > 0) { 
+                    const latestEarthquake = earthquakes[0];
+                    const eqDate = new Date(latestEarthquake.rawTime);
+                    const today = new Date();
+
+                    // ★当日発生した地震かどうかを判定
+                    const isToday = eqDate.getFullYear() === today.getFullYear() &&
+                                  eqDate.getMonth() === today.getMonth() &&
+                                  eqDate.getDate() === today.getDate();
+
+                    if (isToday) {
+                        // ★再生済みIDに含まれていないか確認
+                        if (!playedEarthquakeIds.includes(latestEarthquake.id)) {
+                            isWaitingForAutoplay = true; // 自動再生待機フラグを立てる
+                            // 詳細パネルと固定バーのビューは更新するが、表示はさせない
+                            updateFixedShindoBar(latestEarthquake);
+                            updateNavControls({}, null); // isWaitingForAutoplayフラグを元に「地震 受信中」を表示させる
+                            console.log('新しい地震データを検知しました。3秒後に自動再生を開始します。');
+                            setTimeout(startAutoplay, 3000); // 3秒待ってから自動再生を開始
+                        } else {
+                            console.log('新しい地震データを検知しましたが、既に再生済みのため自動再生は行いません。');
+                        }
+                    } else {
+                        console.log('新しい地震データを検知しましたが、当日発生の地震ではないため自動再生は行いません。');
+                    }
                 }
             }
 
@@ -3683,6 +3703,7 @@
          * @param {Object} eq - 現在選択されている地震情報オブジェクト
          */
         const updateFixedShindoBar = (eq) => {
+            // isWaitingForAutoplayがtrueの場合は、UIを更新せずに早期リターンする
             const shindoNav = document.getElementById('shindo-nav');
 
             if (!eq || !eq.points) {
@@ -4355,6 +4376,9 @@
                             shindoClass: 'bg-blue-600 text-white', pageCurrent: '■', pageTotal: ''
                         };
                         updateFixedBarDisplay(endView);
+
+                        // ★再生済みの地震IDを記録
+                        playedEarthquakeIds.push(eq.id);
 
                         // 終了画面表示後、待機中のメッセージを表示
                         document.getElementById('shindo-page-info').textContent = '地震 待機中';
