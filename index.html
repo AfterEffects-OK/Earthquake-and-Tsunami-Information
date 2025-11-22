@@ -498,6 +498,8 @@
         // --- ループ再生設定用のグローバル変数 ---
         let loopPlaybackMinScale = 30; // デフォルトは震度3以上
         // ------------------------------------
+        // --- 地震一覧表示設定用のグローバル変数 ---
+        let minListScale = 30; // デフォルトは震度3以上
 
 
 
@@ -506,9 +508,6 @@
         const CONFIG = {
             // P2P地震情報 API v2のエンドポイント (地震情報コード551は「震源・震度情報」)
             API_URL: 'https://api.p2pquake.net/v2/history?limit=100',
-            
-            // 地震一覧に表示する地震の「最大」震度の最低ライン (30: 震度3)
-            MIN_LIST_SCALE: 30,
             
             // 詳細パネルの震度別観測地点に表示する「観測点」の最低震度ライン (10: 震度1)
             MIN_DETAIL_SCALE: 10,
@@ -2944,7 +2943,7 @@
                     tsunamiObservationMap.set(eventId, { maxObservedHeight, stations });
                 });
 
-                const filteredEarthquakes = dummyData.filter(eq => eq.code === 551 && eq.earthquake && eq.earthquake.maxScale >= CONFIG.MIN_LIST_SCALE);
+                const filteredEarthquakes = dummyData.filter(eq => eq.code === 551 && eq.earthquake && eq.earthquake.maxScale >= minListScale);
                 PROCESSED_EARTHQUAKES = await Promise.all(filteredEarthquakes.map(eq => processEarthquake(eq, tsunamiDetailsMap, tsunamiObservationMap)));
                 return PROCESSED_EARTHQUAKES;
             }
@@ -3037,7 +3036,7 @@
 
                 // 最大震度3以上の地震のみをフィルタリング (CONFIG.MIN_LIST_SCALEを使用)
                 const filteredEarthquakes = data.filter(eq => 
-                    eq.earthquake && eq.earthquake.maxScale >= CONFIG.MIN_LIST_SCALE
+                    eq.earthquake && eq.earthquake.maxScale >= minListScale
                 );
 
                 // 「イベントキー」を元に重複排除・集約
@@ -3856,9 +3855,11 @@
             }
 
 
-            // --- 4. 「各地の震度は〜」ページの生成 ---
-            const finalTextView = { type: 'summary', shindo: '震度情報', line1: '各地の震度は次のとおりです', line2: '', shindoClass: 'bg-gray-500 text-white' };
-            FIXED_BAR_VIEWS.push(finalTextView);
+            // --- 4. 「各地の震度は〜」ページの生成 (震度別情報がある場合のみ) ---
+            if (shindoGroups.length > 0) {
+                const finalTextView = { type: 'summary', shindo: '震度情報', line1: '各地の震度は次のとおりです', line2: '', shindoClass: 'bg-gray-500 text-white' };
+                FIXED_BAR_VIEWS.push(finalTextView);
+            }
 
             // --- 5. 震度別地域ページの生成 (動的ページ分割) ---
             shindoGroups.forEach(group => {
@@ -4142,6 +4143,12 @@
                 loopPlaybackMinScale = parseInt(savedMinScale, 10);
             }
 
+            // ★ 地震一覧の最低震度の設定を読み込む
+            const savedListMinScale = localStorage.getItem('listMinScale');
+            if (savedListMinScale) {
+                minListScale = parseInt(savedListMinScale, 10);
+            }
+
             // 保存された設定を読み込む
             const savedShortcut = localStorage.getItem('autoplayShortcut');
             if (savedShortcut) {
@@ -4176,9 +4183,9 @@
         };
 
         /**
-         * ショートカット設定モーダルのセットアップ
+         * 設定モーダルのセットアップ
          */
-        const setupShortcutModal = () => {
+        const setupSettingsModal = () => {
             const modal = document.getElementById('shortcut-modal');
             const openButton = document.getElementById('shortcut-settings-button');
             const closeButton = document.getElementById('shortcut-modal-close');
@@ -4186,6 +4193,7 @@
             const input = document.getElementById('shortcut-modal-input');
             const saveButton = document.getElementById('shortcut-modal-save');
             const minScaleSelect = document.getElementById('loop-min-shindo-select');
+            const listMinScaleSelect = document.getElementById('list-min-shindo-select');
 
             openButton.addEventListener('click', () => {
                 modal.classList.remove('hidden');
@@ -4193,6 +4201,7 @@
                 input.value = formatShortcutText(shortcutSetting);
                 minScaleSelect.value = loopPlaybackMinScale;
                 input.focus();
+                listMinScaleSelect.value = minListScale;
             });
 
             const closeModal = () => modal.classList.add('hidden');
@@ -4221,16 +4230,11 @@
                 localStorage.setItem('autoplayShortcut', JSON.stringify(shortcutSetting));
                 loopPlaybackMinScale = parseInt(minScaleSelect.value, 10);
                 localStorage.setItem('loopPlaybackMinScale', loopPlaybackMinScale);
+                minListScale = parseInt(listMinScaleSelect.value, 10);
+                localStorage.setItem('listMinScale', minListScale);
 
-                // 現在選択されている地震の表示を新しい設定で更新する
-                if (selectedCardId) {
-                    const eventId = selectedCardId.substring(5); // "card-"を削除
-                    const eqData = PROCESSED_EARTHQUAKES.find(eq => eq.id === eventId);
-                    if (eqData) {
-                        // 新しい設定で固定バーのビューを再生成
-                        updateFixedShindoBar(eqData);
-                    }
-                }
+                // ★ 設定を保存したら、新しい震度設定で地震一覧を更新する
+                refreshData();
 
                 closeModal();
             });
@@ -4569,8 +4573,8 @@
             // キーボードショートカットのセットアップ
             setupKeyboardShortcuts();
 
-            // ショートカット設定モーダルのセットアップ
-            setupShortcutModal();
+            // 設定モーダルのセットアップ
+            setupSettingsModal();
 
             // 初回表示: データを取得していない状態のメッセージを設定
             document.getElementById('fetch-time-display').textContent = '最終取得日時: データを取得していません';
@@ -4595,6 +4599,20 @@
                     <label for="shortcut-modal-input" class="block text-sm font-medium text-gray-300 mb-1">再生/停止ショートカット</label>
                     <p class="text-xs text-gray-400 mb-2">下の入力欄を選択し、設定したいキーの組み合わせを押してください</p>
                     <input type="text" id="shortcut-modal-input" readonly class="w-full p-2 border rounded-md text-center text-lg font-mono">
+                </div>
+                <div>
+                    <label for="list-min-shindo-select" class="block text-sm font-medium text-gray-300 mb-1">地震一覧に表示する最低震度</label>
+                    <select id="list-min-shindo-select" class="w-full p-2 border rounded-md text-white" style="background-color: #1f2937; border-color: #4b5563;">
+                        <option value="10">震度1以上</option>
+                        <option value="20">震度2以上</option>
+                        <option value="30" selected>震度3以上</option>
+                        <option value="40">震度4以上</option>
+                        <option value="45">震度5弱以上</option>
+                        <option value="50">震度5強以上</option>
+                        <option value="55">震度6弱以上</option>
+                        <option value="60">震度6強以上</option>
+                        <option value="70">震度7</option>
+                    </select>
                 </div>
                 <div>
                     <label for="loop-min-shindo-select" class="block text-sm font-medium text-gray-300 mb-1">情報画面に表示する最低震度</label>
@@ -4625,4 +4643,4 @@
         </div>
     </div>
 </body>
-</html
+</html>
